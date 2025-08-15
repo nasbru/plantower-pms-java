@@ -60,7 +60,7 @@ public class BME680Reader implements Runnable{
                         }
 
                         logger.debug("scheduled task: end");
-                }, 60, period, TimeUnit.SECONDS);
+                }, 0, period, TimeUnit.SECONDS);
 
             try(BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))){
                 logger.debug("Entering try block");
