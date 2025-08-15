@@ -60,7 +60,7 @@ public class BME680Reader implements Runnable{
                         }
 
                         logger.debug("scheduled task: end");
-                }, 0, period, TimeUnit.SECONDS);
+                }, 30, period, TimeUnit.SECONDS);
 
             try(BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))){
                 logger.debug("Entering try block");
@@ -122,7 +122,7 @@ public class BME680Reader implements Runnable{
 
     protected void notifyListeners(Measurement[] measurement){
         for(SensorListener listener : listeners){
-            listener.onDataReceived(measurement, "BME680");
+            listener.onDataReceived(measurement);
         }
     }
     
