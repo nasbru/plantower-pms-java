@@ -5,6 +5,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse;
+import java.net.ConnectException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,7 +37,10 @@ public class SensorDataHandler implements SensorListener {
 
 			System.out.println("Response Code: " + response.statusCode());
 			System.out.println("Response Body: " + response.body());
-		} catch (Exception e) {
+		} catch(ConnectException e) {
+			logger.warn("No connection with HA host.");
+		}
+		catch (Exception e) {
 			logger.error("Exception during data processing.", e);
 		}
 	}
