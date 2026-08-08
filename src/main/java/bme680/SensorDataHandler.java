@@ -16,7 +16,7 @@ import bme680.measurement.Measurement;
 
 public class SensorDataHandler implements SensorListener {
 	private static final String HA_URL = "http://192.168.1.28:8123/api/states/sensor.bme680";
-	private static final String HA_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJkZWFlZDQyNWMwZmY0MmRiYjE5ZTA4YzRkYWJiMmExOSIsImlhdCI6MTc1NTI3OTU1NiwiZXhwIjoyMDcwNjM5NTU2fQ.EMu9Q6837yq0jDftiL99Sh6feDSA7A-QnpalMdPjVhg";
+	private static final String HA_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJlYzYxNmU4NjgzZDk0MjEwYjI3ODZjNWIwYTA3MGEwZSIsImlhdCI6MTc4NjE2NDU1MSwiZXhwIjoyMTAxNTI0NTUxfQ.EEltWCkW3pTkSNRK6uuqjd5Pd06JYT14K7FWraEaLRY";
 	private Logger logger = LoggerFactory.getLogger(SensorDataHandler.class);
 	private ObjectMapper objectMapper = new ObjectMapper();
 	private HttpClient client = HttpClient.newHttpClient();
