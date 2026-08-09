@@ -15,12 +15,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import bme680.measurement.Measurement;
 
 public class SensorDataHandler implements SensorListener {
-	private static final String HA_URL = "http://192.168.1.28:8123/api/states/sensor.bme680";
-	private static final String HA_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJlYzYxNmU4NjgzZDk0MjEwYjI3ODZjNWIwYTA3MGEwZSIsImlhdCI6MTc4NjE2NDU1MSwiZXhwIjoyMTAxNTI0NTUxfQ.EEltWCkW3pTkSNRK6uuqjd5Pd06JYT14K7FWraEaLRY";
+	private static final String SENSOR_ENDPOINT = "/api/states/sensor.bme680";
+	private final String fullUrl; 
+	private final String haToken; 
 	private Logger logger = LoggerFactory.getLogger(SensorDataHandler.class);
 	private ObjectMapper objectMapper = new ObjectMapper();
 	private HttpClient client = HttpClient.newHttpClient();
-
+	
+	public SensorDataHandler(String baseUrl, String haToken) {
+		this.fullUrl = baseUrl + SENSOR_ENDPOINT;
+		this.haToken = haToken;
+		
+	}
 	@Override
 	public void onDataReceived(Measurement[] m) {
 		MeasurementData data = new MeasurementData(m[0].getValue(), m[1].getValue(), m[2].getValue(), m[3].getValue(),
@@ -29,8 +35,8 @@ public class SensorDataHandler implements SensorListener {
 			String jsonData = objectMapper.writeValueAsString(data);
 
 			// Wysyłanie danych do Home Assistant
-			HttpRequest request = HttpRequest.newBuilder().uri(URI.create(HA_URL))
-					.header("Authorization", "Bearer " + HA_TOKEN).header("Content-Type", "application/json")
+			HttpRequest request = HttpRequest.newBuilder().uri(URI.create(fullUrl))
+					.header("Authorization", "Bearer " + haToken).header("Content-Type", "application/json")
 					.POST(BodyPublishers.ofString(jsonData)).build();
 
 			HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());

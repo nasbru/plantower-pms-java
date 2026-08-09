@@ -39,9 +39,11 @@ public class BME680Reader implements Runnable{
         scheduler = Executors.newScheduledThreadPool(1);
         listeners = new ArrayList<>();
         lastLine = line0;
-
+        
+        String programDir = System.getProperty("user.dir");
+        File dataDir = new File(programDir, "data");
         builder = new ProcessBuilder("./bsec_bme680");
-        builder.directory(new File("src/main/c"));
+        builder.directory(dataDir);
     }
 
     @Override
