@@ -7,10 +7,14 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Properties;
 import org.eclipse.paho.client.mqttv3.MqttException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class MainLauncher {
 	
 	private static final Path CONFIG_FILE = Paths.get("data", "config.properties");
+	private static final Logger LOGGER = LoggerFactory.getLogger(MainLauncher.class);
+	
 	public static void main(String[] args) {
 		System.out.println("Start");
 		
@@ -53,6 +57,17 @@ public class MainLauncher {
 		}
 
 		if (sdh != null) {
+			// ustal prefix i node id w config.properties
+		    String discoveryPrefix = props.getProperty("mqtt.discovery_prefix", "homeassistant");
+		    String nodeId = props.getProperty("mqtt.node_id", "bme680_1");
+		    sdh.setDiscoveryConfig(discoveryPrefix, nodeId);
+		    
+		    try {
+				sdh.publishDiscovery(discoveryPrefix, nodeId);
+			} catch (MqttException e) {
+				LOGGER.warn("Failed to publish discovery on startup", e);
+			}
+			
 		    reader.addListener(sdh);
 		    Thread thread = new Thread(reader);
 		    thread.start();
