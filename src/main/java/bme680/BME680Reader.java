@@ -7,7 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.ByteArrayOutputStream;
+//import java.io.ByteArrayOutputStream;
 import java.io.InputStreamReader;
 import java.io.BufferedReader;
 import java.io.File;
@@ -26,15 +26,22 @@ public class BME680Reader implements Runnable{
     private volatile String lastLine;
     private int period;
     private ProcessBuilder builder;
-    private ByteArrayOutputStream buffer;
+    //private ByteArrayOutputStream buffer;
     private final Logger logger;
     private ArrayList<SensorListener> listeners;
     private ScheduledExecutorService scheduler;
     private ScheduledFuture<?> future;
+    private final float tempOffset;
+    private final float humidOffset;
+    private final float pressOffset;
 
-    public BME680Reader(int seconds){
+    public BME680Reader(int seconds, float tempOffset, float humidOffset, float pressOffset){
         period = seconds;
-        buffer = new ByteArrayOutputStream();
+        this.tempOffset = tempOffset;
+        this.humidOffset = humidOffset;
+        this.pressOffset = pressOffset;
+        
+        //buffer = new ByteArrayOutputStream();
         logger = LoggerFactory.getLogger(BME680Reader.class);
         scheduler = Executors.newScheduledThreadPool(1);
         listeners = new ArrayList<>();
@@ -108,9 +115,9 @@ public class BME680Reader implements Runnable{
             decimal = decimal.setScale(2, RoundingMode.HALF_UP);
             values[i - 1] = decimal.floatValue();
         }
-        measurement[0] = new Temperature(values[1]);
-        measurement[1] = new Humidity(values[2]);
-        measurement[2] = new Pressure(values[3]);
+        measurement[0] = new Temperature(values[1] + tempOffset);
+        measurement[1] = new Humidity(values[2] + humidOffset);
+        measurement[2] = new Pressure(values[3] + pressOffset);
         measurement[3] = new IAQ((int)values[0], accuracy);
         measurement[4] = new CO2((int)values[6]);
         measurement[5] = new VOC(values[7]);

@@ -29,7 +29,11 @@ public class MainLauncher {
 		String mqttClientId = props.getProperty("mqtt.clientId", "bme680_publisher_1");
 		String mqttBaseTopic = props.getProperty("mqtt.baseTopic", "home/bme680_1");
 		
-		BME680Reader reader = new BME680Reader(30);
+		float tempOffset = Float.parseFloat(props.getProperty("bme680.temperature.offset", "0.0"));
+		float humidOffset = Float.parseFloat(props.getProperty("bme680.humidity.offset", "0.0"));
+		float pressOffset = Float.parseFloat(props.getProperty("bme680.pressure.offset", "0.0"));
+		
+		BME680Reader reader = new BME680Reader(30, tempOffset, humidOffset, pressOffset);
 		
 		SensorDataHandler sdh = null;
 		int maxAttempts = 5;
