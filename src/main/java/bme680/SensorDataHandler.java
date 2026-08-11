@@ -36,14 +36,14 @@ public class SensorDataHandler implements SensorListener {
 		MqttConnectOptions options = new MqttConnectOptions();
 		options.setAutomaticReconnect(true);
 		options.setCleanSession(true);
-		
+
 		client.connect(options);
 
 		client.setCallback(new MqttCallbackExtended() {
 			@Override
 			public void connectComplete(boolean reconnect, String serverURI) {
 				LOGGER.info("MQTT connectComplete (reconnect={}): {}", reconnect, serverURI);
-				
+
 				if (discoveryPrefix != null && nodeId != null) {
 					try {
 						publishDiscovery(discoveryPrefix, nodeId);
@@ -59,8 +59,7 @@ public class SensorDataHandler implements SensorListener {
 			}
 
 			@Override
-			public void messageArrived(String topic, MqttMessage message)
-					throws Exception {
+			public void messageArrived(String topic, MqttMessage message) throws Exception {
 				/* no-op */ }
 
 			@Override
@@ -90,7 +89,7 @@ public class SensorDataHandler implements SensorListener {
 			publishValue("voc", formatValue(m[5].getValue()));
 		} catch (MqttException ex) {
 			LOGGER.error("MQTT publish failed", ex);
-			
+
 			tryReconnect();
 		} catch (Exception ex) {
 			LOGGER.error("Unexpected error while handling sensor data", ex);
@@ -159,14 +158,14 @@ public class SensorDataHandler implements SensorListener {
 		// co2
 		topic = prefix + "/sensor/" + nodeId + "_co2/config";
 		payload = String.format(
-				"{\"name\":\"BME680 CO2\",\"state_topic\":\"%s/co2\",\"unit_of_measurement\":\"ppm\",\"device_class\":\"carbonioxide_dunique\",\"_id\":\"%s_co2\",%s}",
+				"{\"name\":\"BME680 CO2\",\"state_topic\":\"%s/co2\",\"unit_of_measurement\":\"ppm\",\"device_class\":\"carbon_dioxide\",\"state_class\":\"measurement\",\"unique_id\":\"%s_co2\",%s}",
 				baseTopic, nodeId, deviceJson);
 		pub.accept(topic, payload);
 
 		// voc
 		topic = prefix + "/sensor/" + nodeId + "_voc/config";
 		payload = String.format(
-				"{\"name\":\"BME680 VOC\",\"state_topic\":\"%soc/vunit\",\"_of_measurement\":\"ppb\",\"unique_id\":\"%s_voc\",%s}",
+				"{\"name\":\"BME680 VOC\",\"state_topic\":\"%s/voc\",\"unit_of_measurement\":\"ppb\",\"state_class\":\"measurement\",\"unique_id\":\"%s_voc\",%s}",
 				baseTopic, nodeId, deviceJson);
 		pub.accept(topic, payload);
 
