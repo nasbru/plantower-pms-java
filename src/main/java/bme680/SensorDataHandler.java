@@ -3,12 +3,14 @@ package bme680;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
+import java.util.function.BiConsumer;
 
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
-import org.eclipse.paho.client.mqttv3.MqttPersistenceException;
 import org.eclipse.paho.client.mqttv3.MqttException;
+import org.eclipse.paho.client.mqttv3.MqttCallbackExtended;
+import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,15 +36,14 @@ public class SensorDataHandler implements SensorListener {
 		MqttConnectOptions options = new MqttConnectOptions();
 		options.setAutomaticReconnect(true);
 		options.setCleanSession(true);
-		// jeśli broker wymaga username/password, skonfiguruj options.setUserName(...) i
-		// setPassword(...)
+		
 		client.connect(options);
 
-		client.setCallback(new org.eclipse.paho.client.mqttv3.MqttCallbackExtended() {
+		client.setCallback(new MqttCallbackExtended() {
 			@Override
 			public void connectComplete(boolean reconnect, String serverURI) {
 				LOGGER.info("MQTT connectComplete (reconnect={}): {}", reconnect, serverURI);
-				// jeśli discovery zostało skonfigurowane, opublikuj je
+				
 				if (discoveryPrefix != null && nodeId != null) {
 					try {
 						publishDiscovery(discoveryPrefix, nodeId);
@@ -58,12 +59,12 @@ public class SensorDataHandler implements SensorListener {
 			}
 
 			@Override
-			public void messageArrived(String topic, org.eclipse.paho.client.mqttv3.MqttMessage message)
+			public void messageArrived(String topic, MqttMessage message)
 					throws Exception {
 				/* no-op */ }
 
 			@Override
-			public void deliveryComplete(org.eclipse.paho.client.mqttv3.IMqttDeliveryToken token) {
+			public void deliveryComplete(IMqttDeliveryToken token) {
 				/* no-op */ }
 		});
 		LOGGER.info("Connected to MQTT broker {} as {}", brokerUrl, clientId);
@@ -89,7 +90,7 @@ public class SensorDataHandler implements SensorListener {
 			publishValue("voc", formatValue(m[5].getValue()));
 		} catch (MqttException ex) {
 			LOGGER.error("MQTT publish failed", ex);
-			// Spróbuj ponownie połączenia jeśli klient jest rozłączony
+			
 			tryReconnect();
 		} catch (Exception ex) {
 			LOGGER.error("Unexpected error while handling sensor data", ex);
@@ -100,7 +101,7 @@ public class SensorDataHandler implements SensorListener {
 		String topic = baseTopic + "/" + suffix;
 		MqttMessage msg = new MqttMessage(valueStr.getBytes(StandardCharsets.UTF_8));
 		msg.setQos(1);
-		msg.setRetained(true); // retained = true — dostosuj jeśli nie chcesz
+		msg.setRetained(true);
 		client.publish(topic, msg);
 		LOGGER.debug("Published {} -> {}", topic, valueStr);
 	}
@@ -117,7 +118,7 @@ public class SensorDataHandler implements SensorListener {
 				nodeId, devName);
 
 		// helper lambda-like style: build and publish
-		java.util.function.BiConsumer<String, String> pub = (topic, payload) -> {
+		BiConsumer<String, String> pub = (topic, payload) -> {
 			try {
 				MqttMessage msg = new MqttMessage(payload.getBytes(StandardCharsets.UTF_8));
 				msg.setRetained(true);
