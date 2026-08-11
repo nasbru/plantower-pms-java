@@ -1,13 +1,11 @@
 package bme680;
 
-//import bme680.SensorListener;
 import bme680.measurement.*;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-//import java.io.ByteArrayOutputStream;
 import java.io.InputStreamReader;
 import java.io.BufferedReader;
 import java.io.File;
@@ -20,14 +18,13 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 public class BME680Reader implements Runnable{
-    private final String line0 = "2025-02-28 10:58:23,[IAQ (0)]: 25.00,[T degC]: 0.00,[H %rH]: 0.00,[P hPa]: 0.00,[G Ohms]: 22477,[S]: 0,[eCO2 ppm]: 0.00,[bVOCe ppm]: 0.00";
+    private static final String LINE0 = "2025-02-28 10:58:23,[IAQ (0)]: 25.00,[T degC]: 0.00,[H %rH]: 0.00,[P hPa]: 0.00,[G Ohms]: 22477,[S]: 0,[eCO2 ppm]: 0.00,[bVOCe ppm]: 0.00";
+    private static final Logger LOGGER = LoggerFactory.getLogger(BME680Reader.class);
 
     private volatile boolean continueReading = true;
     private volatile String lastLine;
     private int period;
     private ProcessBuilder builder;
-    //private ByteArrayOutputStream buffer;
-    private final Logger logger;
     private ArrayList<SensorListener> listeners;
     private ScheduledExecutorService scheduler;
     private ScheduledFuture<?> future;
@@ -41,11 +38,9 @@ public class BME680Reader implements Runnable{
         this.humidOffset = humidOffset;
         this.pressOffset = pressOffset;
         
-        //buffer = new ByteArrayOutputStream();
-        logger = LoggerFactory.getLogger(BME680Reader.class);
         scheduler = Executors.newScheduledThreadPool(1);
         listeners = new ArrayList<>();
-        lastLine = line0;
+        lastLine = LINE0;
         
         String programDir = System.getProperty("user.dir");
         File dataDir = new File(programDir, "data");
@@ -56,48 +51,48 @@ public class BME680Reader implements Runnable{
     @Override
     public void run(){
         try{
-            logger.debug("Starting BME680Reader run method.");
+            LOGGER.debug("Starting BME680Reader run method.");
             Process process = builder.start();
 
             future = scheduler.scheduleAtFixedRate(() -> {
-                        logger.debug("scheduled task: start");
+                        LOGGER.debug("scheduled task: start");
 
                         Measurement[] measurement = extractData(lastLine);
                         notifyListeners(measurement);
                         for(Measurement m : measurement){
-                            logger.debug(m.toString());
+                            LOGGER.debug(m.toString());
                         }
 
-                        logger.debug("scheduled task: end");
+                        LOGGER.debug("scheduled task: end");
                 }, 30, period, TimeUnit.SECONDS);
 
             try(BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))){
-                logger.debug("Entering try block");
+                LOGGER.debug("Entering try block");
                 String line;
                 while((line = reader.readLine()) != null){
                     if(!continueReading){
-                        logger.info("BME680 sensor reading stopped.");
+                        LOGGER.info("BME680 sensor reading stopped.");
                         break;
                     }
                     if(!line.trim().isEmpty()){
                         lastLine = line;
-                        logger.debug("Read line: " + line);
+                        LOGGER.debug("Read line: " + line);
                     }
                     else{
-                        logger.debug("Line is empty");
+                        LOGGER.debug("Line is empty");
                     }
                 }
-                logger.debug("End of the stream.");
+                LOGGER.debug("End of the stream.");
             }
             catch(IOException e){
-                logger.error("Error during reading data from sensor", e);
+                LOGGER.error("Error during reading data from sensor", e);
             }
         }
         catch(IOException e){
-            logger.error("Error during starting bsec_bme680 process.", e);
+            LOGGER.error("Error during starting bsec_bme680 process.", e);
         }
         catch(Exception e){
-            logger.error("General error.", e);
+            LOGGER.error("General error.", e);
         }
     }
 

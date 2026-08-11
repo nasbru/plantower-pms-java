@@ -16,14 +16,13 @@ public class MainLauncher {
 	private static final Logger LOGGER = LoggerFactory.getLogger(MainLauncher.class);
 	
 	public static void main(String[] args) {
-		System.out.println("Start");
 		
 		Properties props = new Properties();
 		try (InputStream in = Files.newInputStream(CONFIG_FILE)) {
 			props.clear();
 			props.load(in);
 		} catch (IOException e) {
-			System.out.println(e.getMessage());
+			LOGGER.error("Error during reading config file. ", e.getMessage());
 		}
 		String mqttBroker = props.getProperty("mqtt.broker", "tcp://localhost:1883");
 		String mqttClientId = props.getProperty("mqtt.clientId", "bme680_publisher_1");
@@ -44,12 +43,12 @@ public class MainLauncher {
 		    attempt++;
 		    try {
 		        sdh = new SensorDataHandler(mqttBroker, mqttClientId, mqttBaseTopic);
-		        break; // udało się
+		        break; // attempt successful
 		    } catch (MqttException e) {
-		        System.err.println("MQTT connect failed (attempt " + attempt + "): " + e.getMessage());
+		        LOGGER.error("MQTT connect failed (attempt " + attempt + "): ", e.getMessage());
 		        if (attempt >= maxAttempts) {
-		            System.err.println("Max attempts reached. Exiting.");
-		            System.exit(1); // lub continue bez mqtt
+		            LOGGER.error("Max attempts reached. Exiting.");
+		            System.exit(1);
 		        }
 		        try {
 		            Thread.sleep(retryDelayMs);
@@ -61,7 +60,6 @@ public class MainLauncher {
 		}
 
 		if (sdh != null) {
-			// ustal prefix i node id w config.properties
 		    String discoveryPrefix = props.getProperty("mqtt.discovery_prefix", "homeassistant");
 		    String nodeId = props.getProperty("mqtt.node_id", "bme680_1");
 		    sdh.setDiscoveryConfig(discoveryPrefix, nodeId);
