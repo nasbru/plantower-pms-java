@@ -1,4 +1,4 @@
-package bme680;
+package com.github.nasbru;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -9,6 +9,8 @@ import java.util.Properties;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.github.nasbru.bme680.BME680Reader;
 
 public class MainLauncher {
 	

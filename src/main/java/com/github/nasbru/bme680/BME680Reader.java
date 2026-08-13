@@ -1,9 +1,11 @@
-package bme680;
+package com.github.nasbru.bme680;
 
-import bme680.measurement.*;
+import com.github.nasbru.measurements.*;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.github.nasbru.SensorListener;
 
 import java.io.IOException;
 import java.io.InputStreamReader;

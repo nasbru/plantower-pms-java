@@ -1,4 +1,4 @@
-package bme680;
+package com.github.nasbru;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -15,7 +15,7 @@ import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import bme680.measurement.Measurement;
+import com.github.nasbru.measurements.Measurement;
 
 public class SensorDataHandler implements SensorListener {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SensorDataHandler.class);

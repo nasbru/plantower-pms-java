@@ -1,4 +1,4 @@
-package bme680;
+package com.github.nasbru;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;

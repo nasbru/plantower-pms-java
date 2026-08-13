@@ -4,8 +4,8 @@
 
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.github.nasbru</groupId>
-	<artifactId>bme680</artifactId>
-	<version>0.0.4-SNAPSHOT</version>
+	<artifactId>bme680_pms7003_HA</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
 
 	<build>
 		<plugins>
