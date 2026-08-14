@@ -1,11 +1,5 @@
 package com.github.nasbru;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Properties;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,13 +8,15 @@ import com.github.nasbru.sensors.BME680Reader;
 
 public class MainLauncher {
 	
-	private static final Path CONFIG_FILE = Paths.get("data", "config.properties");
 	private static final Logger LOGGER = LoggerFactory.getLogger(MainLauncher.class);
 	
 	public static void main(String[] args) {
 		
 		Config config = new Config();
 		String mqttBroker = config.getMqttBroker();
+		String sensorName = "bme680";
+		String mqttClientId = config.getClientId(sensorName);
+		String mqttBaseTopic = config.getBaseTopic(sensorName);
 		
 		BME680Reader reader = new BME680Reader(30, config);
 		
@@ -32,7 +28,7 @@ public class MainLauncher {
 		while (attempt < maxAttempts) {
 		    attempt++;
 		    try {
-		        sdh = new SensorDataHandler(mqttBroker, mqttClientId, mqttBaseTopic);
+		        sdh = new SensorDataHandler(mqttBroker, mqttClientId, mqttBaseTopic, reader);
 		        break; // attempt successful
 		    } catch (MqttException e) {
 		        LOGGER.error("MQTT connect failed (attempt " + attempt + "): ", e.getMessage());
@@ -50,8 +46,8 @@ public class MainLauncher {
 		}
 
 		if (sdh != null) {
-		    String discoveryPrefix = props.getProperty("mqtt.discovery_prefix", "homeassistant");
-		    String nodeId = props.getProperty("mqtt.node_id", "bme680_1");
+		    String discoveryPrefix = config.getMqttDiscoveryPrefix();
+		    String nodeId = config.getNodeId(sensorName);
 		    sdh.setDiscoveryConfig(discoveryPrefix, nodeId);
 		    
 		    try {

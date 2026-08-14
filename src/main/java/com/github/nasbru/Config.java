@@ -36,7 +36,7 @@ public class Config {
 	}
 	
 	public String getMqttBroker() {
-        return properties.getProperty("mqtt.broker");
+        return properties.getProperty("mqtt.broker", "tcp://localhost:1883");
     }
 
     public String getMqttDiscoveryPrefix() {
