@@ -19,10 +19,11 @@ import com.github.nasbru.measurements.Measurement;
 
 public class SensorDataHandler implements SensorListener {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SensorDataHandler.class);
-
-	private final MqttClient client;
-	private final String baseTopic;
+	
 	private String discoveryPrefix;
+	
+	private final MqttClient bme680Client;
+	private final String bme680BaseTopic;
 	private String nodeId;
 
 	/**
@@ -31,15 +32,15 @@ public class SensorDataHandler implements SensorListener {
 	 * @param baseTopic e.g. "home/bme680_1" (no trailing slash)
 	 */
 	public SensorDataHandler(String brokerUrl, String clientId, String baseTopic) throws MqttException {
-		this.baseTopic = baseTopic.endsWith("/") ? baseTopic.substring(0, baseTopic.length() - 1) : baseTopic;
-		this.client = new MqttClient(brokerUrl, clientId);
+		this.bme680BaseTopic = baseTopic.endsWith("/") ? baseTopic.substring(0, baseTopic.length() - 1) : baseTopic;
+		this.bme680Client = new MqttClient(brokerUrl, clientId);
 		MqttConnectOptions options = new MqttConnectOptions();
 		options.setAutomaticReconnect(true);
 		options.setCleanSession(true);
 
-		client.connect(options);
+		bme680Client.connect(options);
 
-		client.setCallback(new MqttCallbackExtended() {
+		bme680Client.setCallback(new MqttCallbackExtended() {
 			@Override
 			public void connectComplete(boolean reconnect, String serverURI) {
 				LOGGER.info("MQTT connectComplete (reconnect={}): {}", reconnect, serverURI);
@@ -97,16 +98,16 @@ public class SensorDataHandler implements SensorListener {
 	}
 
 	private void publishValue(String suffix, String valueStr) throws MqttException {
-		String topic = baseTopic + "/" + suffix;
+		String topic = bme680BaseTopic + "/" + suffix;
 		MqttMessage msg = new MqttMessage(valueStr.getBytes(StandardCharsets.UTF_8));
 		msg.setQos(1);
 		msg.setRetained(true);
-		client.publish(topic, msg);
+		bme680Client.publish(topic, msg);
 		LOGGER.debug("Published {} -> {}", topic, valueStr);
 	}
 
 	public void publishDiscovery(String discoveryPrefix, String nodeId) throws MqttException {
-		if (client == null || !client.isConnected()) {
+		if (bme680Client == null || !bme680Client.isConnected()) {
 			LOGGER.warn("Cannot publish discovery - client disconnected");
 			return;
 		}
@@ -122,7 +123,7 @@ public class SensorDataHandler implements SensorListener {
 				MqttMessage msg = new MqttMessage(payload.getBytes(StandardCharsets.UTF_8));
 				msg.setRetained(true);
 				msg.setQos(1);
-				client.publish(topic, msg);
+				bme680Client.publish(topic, msg);
 			} catch (MqttException e) {
 				LOGGER.warn("Failed to publish discovery topic {}: {}", topic, e.getMessage());
 			}
@@ -132,41 +133,41 @@ public class SensorDataHandler implements SensorListener {
 		String topic = prefix + "/sensor/" + nodeId + "_temperature/config";
 		String payload = String.format(
 				"{\"name\":\"BME680 Temperature\",\"state_topic\":\"%s/temperature\",\"unit_of_measurement\":\"°C\",\"device_class\":\"temperature\",\"unique_id\":\"%s_temperature\",%s}",
-				baseTopic, nodeId, deviceJson);
+				bme680BaseTopic, nodeId, deviceJson);
 		pub.accept(topic, payload);
 
 		// humidity
 		topic = prefix + "/sensor/" + nodeId + "_humidity/config";
 		payload = String.format(
 				"{\"name\":\"BME680 Humidity\",\"state_topic\":\"%s/humidity\",\"unit_of_measurement\":\"%%\",\"device_class\":\"humidity\",\"unique_id\":\"%s_humidity\",%s}",
-				baseTopic, nodeId, deviceJson);
+				bme680BaseTopic, nodeId, deviceJson);
 		pub.accept(topic, payload);
 
 		// pressure
 		topic = prefix + "/sensor/" + nodeId + "_pressure/config";
 		payload = String.format(
 				"{\"name\":\"BME680 Pressure\",\"state_topic\":\"%s/pressure\",\"unit_of_measurement\":\"hPa\",\"device_class\":\"pressure\",\"unique_id\":\"%s_pressure\",%s}",
-				baseTopic, nodeId, deviceJson);
+				bme680BaseTopic, nodeId, deviceJson);
 		pub.accept(topic, payload);
 
 		// iaq
 		topic = prefix + "/sensor/" + nodeId + "_iaq/config";
 		payload = String.format("{\"name\":\"BME680 IAQ\",\"state_topic\":\"%s/iaq\",\"unique_id\":\"%s_iaq\",%s}",
-				baseTopic, nodeId, deviceJson);
+				bme680BaseTopic, nodeId, deviceJson);
 		pub.accept(topic, payload);
 
 		// co2
 		topic = prefix + "/sensor/" + nodeId + "_co2/config";
 		payload = String.format(
 				"{\"name\":\"BME680 CO2\",\"state_topic\":\"%s/co2\",\"unit_of_measurement\":\"ppm\",\"device_class\":\"carbon_dioxide\",\"state_class\":\"measurement\",\"unique_id\":\"%s_co2\",%s}",
-				baseTopic, nodeId, deviceJson);
+				bme680BaseTopic, nodeId, deviceJson);
 		pub.accept(topic, payload);
 
 		// voc
 		topic = prefix + "/sensor/" + nodeId + "_voc/config";
 		payload = String.format(
 				"{\"name\":\"BME680 VOC\",\"state_topic\":\"%s/voc\",\"unit_of_measurement\":\"ppb\",\"state_class\":\"measurement\",\"unique_id\":\"%s_voc\",%s}",
-				baseTopic, nodeId, deviceJson);
+				bme680BaseTopic, nodeId, deviceJson);
 		pub.accept(topic, payload);
 
 		LOGGER.info("Published MQTT discovery for node {}", nodeId);
@@ -182,9 +183,9 @@ public class SensorDataHandler implements SensorListener {
 
 	private void tryReconnect() {
 		try {
-			if (!client.isConnected()) {
+			if (!bme680Client.isConnected()) {
 				LOGGER.info("Trying to reconnect MQTT client...");
-				client.reconnect(); // używa automatic reconnect jeśli było ustawione
+				bme680Client.reconnect(); // używa automatic reconnect jeśli było ustawione
 			}
 		} catch (MqttException e) {
 			LOGGER.warn("Reconnect attempt failed", e);
@@ -193,8 +194,8 @@ public class SensorDataHandler implements SensorListener {
 
 	public void disconnect() {
 		try {
-			if (client.isConnected())
-				client.disconnect();
+			if (bme680Client.isConnected())
+				bme680Client.disconnect();
 		} catch (MqttException e) {
 			LOGGER.warn("Error while disconnecting MQTT client", e);
 		}

@@ -19,22 +19,10 @@ public class MainLauncher {
 	
 	public static void main(String[] args) {
 		
-		Properties props = new Properties();
-		try (InputStream in = Files.newInputStream(CONFIG_FILE)) {
-			props.clear();
-			props.load(in);
-		} catch (IOException e) {
-			LOGGER.error("Error during reading config file. ", e.getMessage());
-		}
-		String mqttBroker = props.getProperty("mqtt.broker", "tcp://localhost:1883");
-		String mqttClientId = props.getProperty("mqtt.clientId", "bme680_publisher_1");
-		String mqttBaseTopic = props.getProperty("mqtt.baseTopic", "home/bme680_1");
+		Config config = new Config();
+		String mqttBroker = config.getMqttBroker();
 		
-		float tempOffset = Float.parseFloat(props.getProperty("bme680.temperature.offset", "0.0"));
-		float humidOffset = Float.parseFloat(props.getProperty("bme680.humidity.offset", "0.0"));
-		float pressOffset = Float.parseFloat(props.getProperty("bme680.pressure.offset", "0.0"));
-		
-		BME680Reader reader = new BME680Reader(30, tempOffset, humidOffset, pressOffset);
+		BME680Reader reader = new BME680Reader(30, config);
 		
 		SensorDataHandler sdh = null;
 		int maxAttempts = 5;

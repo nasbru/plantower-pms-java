@@ -5,6 +5,7 @@ import com.github.nasbru.measurements.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.github.nasbru.Config;
 import com.github.nasbru.SensorListener;
 
 import java.io.IOException;
@@ -30,15 +31,16 @@ public class BME680Reader implements Runnable, Sensor {
     private ArrayList<SensorListener> listeners;
     private ScheduledExecutorService scheduler;
     private ScheduledFuture<?> future;
+    
     private final float tempOffset;
     private final float humidOffset;
     private final float pressOffset;
 
-    public BME680Reader(int seconds, float tempOffset, float humidOffset, float pressOffset){
+    public BME680Reader(int seconds, Config config){
         period = seconds;
-        this.tempOffset = tempOffset;
-        this.humidOffset = humidOffset;
-        this.pressOffset = pressOffset;
+        this.tempOffset = config.getBme680TemperatureOffset();
+        this.humidOffset = config.getBme680HumidityOffset();
+        this.pressOffset = config.getBme680PressureOffset();
         
         scheduler = Executors.newScheduledThreadPool(1);
         listeners = new ArrayList<>();
