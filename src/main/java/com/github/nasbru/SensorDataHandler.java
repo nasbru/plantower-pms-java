@@ -24,14 +24,17 @@ public class SensorDataHandler implements SensorListener {
 	private static final String SUFFIX = "_1";
 	private static final String BASE = "home/";
 	
-	private final String discoveryPrefix;
-	private final String nodeId;
+	private String discoveryPrefix;
+	private String brokerUrl;
 	
-	private final MqttClient mqttClient;
+	private final String nodeId;
 	private final String baseTopic;
 	private final String clientId;
 	
-	private final Sensor sensor;
+	private MqttClient mqttClient;
+	
+	private final String sensorName;
+	private boolean discoveryPublished = false;
 
 	/**
 	 * @param brokerUrl e.g. "tcp://localhost:1883"
@@ -43,19 +46,15 @@ public class SensorDataHandler implements SensorListener {
 		mqtt.bme680.baseTopic = home/bme680_1
 		mqtt.bme680.node_id = bme680_1
 	 */
-	public SensorDataHandler(Config config, Sensor sensor) throws MqttException {
-		String brokerUrl = config.getMqttBroker();
-		String sensorName = sensor.getName().toLowerCase();
-		
-		this.discoveryPrefix = config.getMqttDiscoveryPrefix();
+	public SensorDataHandler(String sensorName) {
+		this.sensorName = sensorName;
 		this.nodeId = sensorName + SUFFIX;
-		
-		
 		this.baseTopic = BASE + sensorName + SUFFIX;
 		this.clientId = sensorName + PUB + SUFFIX;
+	}
+	
+	public void initMqtt() throws MqttException {
 		this.mqttClient = new MqttClient(brokerUrl, clientId);
-		
-		this.sensor = sensor;
 		
 		MqttConnectOptions options = new MqttConnectOptions();
 		options.setAutomaticReconnect(true);
@@ -67,14 +66,6 @@ public class SensorDataHandler implements SensorListener {
 			@Override
 			public void connectComplete(boolean reconnect, String serverURI) {
 				LOGGER.info("MQTT connectComplete (reconnect={}): {}", reconnect, serverURI);
-
-				if (discoveryPrefix != null && nodeId != null) {
-					try {
-						publishDiscovery(discoveryPrefix, nodeId);
-					} catch (MqttException e) {
-						LOGGER.warn("Failed to publish discovery on connectComplete", e);
-					}
-				}
 			}
 
 			@Override
@@ -90,12 +81,12 @@ public class SensorDataHandler implements SensorListener {
 			public void deliveryComplete(IMqttDeliveryToken token) {
 				/* no-op */ }
 		});
-		LOGGER.info("Connected to MQTT broker {} as {} for sensor {}", brokerUrl, clientId, sensor.getName());
+		LOGGER.info("Connected to MQTT broker {} as {}", brokerUrl, clientId);
 	}
 
-	public void setDiscoveryConfig(String discoveryPrefix, String nodeId) {
+	public void setMqttConfig(String brokerUrl, String discoveryPrefix) {
+		this.brokerUrl = brokerUrl == null ? "tcp://localhost:1883" : brokerUrl;
 		this.discoveryPrefix = discoveryPrefix == null ? "homeassistant" : discoveryPrefix;
-		this.nodeId = nodeId == null ? sensor.getName().toLowerCase() : nodeId;
 	}
 
 	@Override
@@ -104,6 +95,16 @@ public class SensorDataHandler implements SensorListener {
 			LOGGER.warn("Received empty measurement array");
 			return;
 		}
+		
+		if(!discoveryPublished) {
+			try {
+				publishDiscovery(discoveryPrefix, nodeId, m);
+				discoveryPublished = true;
+			} catch (MqttException e) {
+				LOGGER.warn("Failed to publish discovery", e);
+			}
+		}
+		
 		try {
 			for (Measurement measurement : m) {
 				if (measurement != null) {
@@ -125,17 +126,15 @@ public class SensorDataHandler implements SensorListener {
 		msg.setQos(1);
 		msg.setRetained(true);
 		mqttClient.publish(topic, msg);
-		LOGGER.debug("Published {} -> {}", topic, valueStr);
+		LOGGER.info("Published {} -> {}", topic, valueStr);
 	}
 
-	public void publishDiscovery(String discoveryPrefix, String nodeId) throws MqttException {
+	private void publishDiscovery(String discoveryPrefix, String nodeId, Measurement[] measurements) throws MqttException {
 		if (mqttClient == null || !mqttClient.isConnected()) {
 			LOGGER.warn("Cannot publish discovery - client disconnected");
 			return;
 		}
 		
-		String prefix = discoveryPrefix == null ? "homeassistant" : discoveryPrefix;
-		String sensorName = sensor.getName();
 		String devName = sensorName + " " + nodeId;
 		String deviceJson = String.format(
 				"\"device\":{\"identifiers\":[\"%s\"],\"name\":\"%s\",\"model\":\"%s\",\"manufacturer\":\"Custom\"}",
@@ -153,20 +152,20 @@ public class SensorDataHandler implements SensorListener {
 		};
 
 		// Dynamicznie publikuj discovery dla każdego pomiaru
-		Measurement[] measurements = sensor.getMeasurements();
+		
 		for (Measurement m : measurements) {
 			if (m != null) {
 				String type = m.getType().toLowerCase();
 				String displayName = capitalizeFirstLetter(m.getType());
 				String deviceClass = getDeviceClass(type);
 				
-				String topic = prefix + "/sensor/" + nodeId + "_" + type + "/config";
+				String topic = discoveryPrefix + "/sensor/" + nodeId + "_" + type + "/config";
 				String payload = buildDiscoveryPayload(displayName, sensorName, type, nodeId, m, deviceClass, deviceJson);
 				pub.accept(topic, payload);
 			}
 		}
 
-		LOGGER.info("Published MQTT discovery for {} node {}", sensorName, nodeId);
+		LOGGER.info("Published MQTT discovery for node {}", nodeId);
 	}
 
 	private String buildDiscoveryPayload(String displayName, String sensorName, String measurementType,

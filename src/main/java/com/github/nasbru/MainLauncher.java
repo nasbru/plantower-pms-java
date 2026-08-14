@@ -13,13 +13,35 @@ public class MainLauncher {
 	public static void main(String[] args) {
 		
 		Config config = new Config();
-		String mqttBroker = config.getMqttBroker();
-		String sensorName = "bme680";
-		String mqttClientId = config.getClientId(sensorName);
-		String mqttBaseTopic = config.getBaseTopic(sensorName);
+		BME680Reader bme680 = new BME680Reader(30, config);
 		
-		BME680Reader reader = new BME680Reader(30, config);
+		String bme680Name = bme680.getName();
+		String broker = config.getMqttBroker();
+		String prefix = config.getMqttDiscoveryPrefix();
 		
+		SensorDataHandler bme680DataHandler = new SensorDataHandler(bme680Name);
+		
+		bme680DataHandler.setMqttConfig(broker, prefix);
+		try {
+			bme680DataHandler.initMqtt();
+		} catch (MqttException e) {
+			LOGGER.error("MQTT initialization error");
+		}
+		
+		bme680.addListener(bme680DataHandler);
+	    Thread thread = new Thread(bme680);
+	    thread.start();
+	    
+	    
+	    while(true) {
+			try {
+				Thread.sleep(5000);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+		/*
 		SensorDataHandler sdh = null;
 		int maxAttempts = 5;
 		int attempt = 0;
@@ -68,6 +90,6 @@ public class MainLauncher {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-		}
+		} */
 	}
 }
