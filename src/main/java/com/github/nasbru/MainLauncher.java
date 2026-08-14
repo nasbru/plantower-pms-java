@@ -10,7 +10,7 @@ import org.eclipse.paho.client.mqttv3.MqttException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.github.nasbru.bme680.BME680Reader;
+import com.github.nasbru.sensors.BME680Reader;
 
 public class MainLauncher {
 	

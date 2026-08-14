@@ -1,4 +1,4 @@
-package com.github.nasbru.bme680;
+package com.github.nasbru.sensors;
 
 import com.github.nasbru.measurements.*;
 
@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
-public class BME680Reader implements Runnable{
+public class BME680Reader implements Runnable, Sensor {
     private static final String LINE0 = "2025-02-28 10:58:23,[IAQ (0)]: 25.00,[T degC]: 0.00,[H %rH]: 0.00,[P hPa]: 0.00,[G Ohms]: 22477,[S]: 0,[eCO2 ppm]: 0.00,[bVOCe ppm]: 0.00";
     private static final Logger LOGGER = LoggerFactory.getLogger(BME680Reader.class);
 
@@ -97,8 +97,17 @@ public class BME680Reader implements Runnable{
             LOGGER.error("General error.", e);
         }
     }
+    
+    @Override
+    public Measurement[] getMeasurements(){
+		return extractData(lastLine);
+	}
+    
+    public String getName(){
+		return "BME680";
+	}
 
-    public Measurement[] extractData(String dataLine){
+    private Measurement[] extractData(String dataLine){
         Measurement[] measurement = new Measurement[6];
         String[] parts = dataLine.split(",");
         float[] values = new float[8];
