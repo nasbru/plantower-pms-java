@@ -34,37 +34,38 @@ public class Config {
 			LOGGER.error("Error while reading config file.");
 		}
 	}
-	
+
 	public String getMqttBroker() {
-        return properties.getProperty("mqtt.broker", "tcp://localhost:1883");
-    }
+		return properties.getProperty("mqtt.broker", "tcp://localhost:1883");
+	}
 
-    public String getMqttDiscoveryPrefix() {
-        return properties.getProperty("mqtt.discovery_prefix");
-    }
+	public String getMqttDiscoveryPrefix() {
+		return properties.getProperty("mqtt.discovery_prefix");
+	}
+	/*
+	 * public String getClientId(String sensorName) { return
+	 * properties.getProperty("mqtt." + sensorName + ".clientId"); }
+	 * 
+	 * public String getBaseTopic(String sensorName) { return
+	 * properties.getProperty("mqtt." + sensorName + ".baseTopic"); }
+	 * 
+	 * public String getNodeId(String sensorName) { return
+	 * properties.getProperty("mqtt." + sensorName + ".node_id"); }
+	 */
 
-    public String getClientId(String sensorName) {
-        return properties.getProperty("mqtt." + sensorName + ".clientId");
-    }
+	public float getBme680TemperatureOffset() {
+		return Float.parseFloat(properties.getProperty("bme680.temperature.offset", "0"));
+	}
 
-    public String getBaseTopic(String sensorName) {
-        return properties.getProperty("mqtt." + sensorName + ".baseTopic");
-    }
+	public float getBme680HumidityOffset() {
+		return Float.parseFloat(properties.getProperty("bme680.humidity.offset", "0"));
+	}
 
-    public String getNodeId(String sensorName) {
-        return properties.getProperty("mqtt." + sensorName + ".node_id");
-    }
+	public float getBme680PressureOffset() {
+		return Float.parseFloat(properties.getProperty("bme680.pressure.offset", "0"));
+	}
 
-    public float getBme680TemperatureOffset() {
-        return Float.parseFloat(properties.getProperty("bme680.temperature.offset", "0"));
-    }
-
-    public float getBme680HumidityOffset() {
-        return Float.parseFloat(properties.getProperty("bme680.humidity.offset", "0"));
-    }
-
-    public float getBme680PressureOffset() {
-        return Float.parseFloat(properties.getProperty("bme680.pressure.offset", "0"));
-    }
+	public String getPms7003Device() {
+		return properties.getProperty("pms7003.device", "/dev/ttyS0");
+	}
 }
-

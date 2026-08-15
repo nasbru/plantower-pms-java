@@ -4,6 +4,10 @@ import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -13,7 +17,7 @@ import com.pi4j.io.serial.Serial;
 import com.pi4j.io.serial.Parity;
 import com.pi4j.io.serial.StopBits;
 import com.pi4j.io.serial.FlowControl;
-
+import com.github.nasbru.SensorListener;
 import com.github.nasbru.measurements.Measurement;
 import com.github.nasbru.measurements.PM10;
 import com.github.nasbru.measurements.PM1_0;
@@ -22,12 +26,20 @@ import com.github.nasbru.measurements.PM2_5;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class PMS7003 implements Sensor {
+public class PMS7003 implements Runnable {
 	private final Serial serial;
 	private static final Logger LOGGER = LoggerFactory.getLogger(PMS7003.class);
-	private static final int MEASUREMENT_FRAME_LENGTH = 32; // standard PMS7003 frame length
+	private static final int MEASUREMENT_FRAME_LENGTH = 32;
+	private ScheduledExecutorService scheduler;
+	private ScheduledFuture<?> future;
+	private int interval;
 
-	public PMS7003(Context pi4j, String serialAddress) {
+	private ArrayList<SensorListener> listeners;
+
+	public PMS7003(int period, Context pi4j, String serialAddress) {
+		listeners = new ArrayList<>();
+		scheduler = Executors.newScheduledThreadPool(1);
+		this.interval = period;
 
 		if (pi4j == null) {
 			throw new IllegalArgumentException("pi4j Context must not be null");
@@ -49,7 +61,7 @@ public class PMS7003 implements Sensor {
 				.provider("pigpio-serial").build());
 
 		serial.open();
-		
+
 		try {
 			passiveMode();
 		} catch (InterruptedException e) {
@@ -57,7 +69,22 @@ public class PMS7003 implements Sensor {
 			e.printStackTrace();
 		}
 	}
-	
+
+	@Override
+	public void run() {
+		future = scheduler.scheduleAtFixedRate(() -> {
+			LOGGER.debug("scheduled task: start");
+
+			Measurement[] measurement = getMeasurements();
+			notifyListeners(measurement);
+			for (Measurement m : measurement) {
+				LOGGER.debug(m.toString());
+			}
+
+			LOGGER.debug("scheduled task: end");
+		}, 30, interval, TimeUnit.SECONDS);
+	}
+
 	public String getName() {
 		return "PMS7003";
 	}
@@ -191,7 +218,6 @@ public class PMS7003 implements Sensor {
 		}
 	}
 
-	@Override
 	public Measurement[] getMeasurements() {
 		final int maxAttempts = 50;
 		try {
@@ -281,9 +307,18 @@ public class PMS7003 implements Sensor {
 		result.add(new PM1_0(pm1_0));
 		result.add(new PM2_5(pm2_5));
 		result.add(new PM10(pm10));
-		
 
 		return result.toArray(new Measurement[0]);
+	}
+
+	public void addListener(SensorListener listener) {
+		listeners.add(listener);
+	}
+
+	protected void notifyListeners(Measurement[] measurement) {
+		for (SensorListener listener : listeners) {
+			listener.onDataReceived(measurement);
+		}
 	}
 
 	private enum Command {

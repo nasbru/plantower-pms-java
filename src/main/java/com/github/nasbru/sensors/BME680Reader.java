@@ -26,7 +26,7 @@ public class BME680Reader implements Runnable {
 
     private volatile boolean continueReading = true;
     private volatile String lastLine;
-    private int period;
+    private int interval;
     private ProcessBuilder builder;
     private ArrayList<SensorListener> listeners;
     private ScheduledExecutorService scheduler;
@@ -37,7 +37,7 @@ public class BME680Reader implements Runnable {
     private final float pressOffset;
 
     public BME680Reader(int seconds, Config config){
-        period = seconds;
+        interval = seconds;
         this.tempOffset = config.getBme680TemperatureOffset();
         this.humidOffset = config.getBme680HumidityOffset();
         this.pressOffset = config.getBme680PressureOffset();
@@ -68,7 +68,7 @@ public class BME680Reader implements Runnable {
                         }
 
                         LOGGER.debug("scheduled task: end");
-                }, 30, period, TimeUnit.SECONDS);
+                }, 30, interval, TimeUnit.SECONDS);
 
             try(BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))){
                 LOGGER.debug("Entering try block");

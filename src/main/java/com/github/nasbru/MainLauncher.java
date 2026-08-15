@@ -5,6 +5,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.github.nasbru.sensors.BME680Reader;
+import com.github.nasbru.sensors.PMS7003;
+import com.pi4j.Pi4J;
+import com.pi4j.context.Context;
 
 public class MainLauncher {
 	
@@ -12,25 +15,39 @@ public class MainLauncher {
 	
 	public static void main(String[] args) {
 		
+		Context pi4j = Pi4J.newAutoContext();
+		
 		Config config = new Config();
-		BME680Reader bme680 = new BME680Reader(30, config);
+		int interval = 30;
+		String pms7003Device = config.getPms7003Device();
+		
+		BME680Reader bme680 = new BME680Reader(interval, config);
+		PMS7003 pms7003 = new PMS7003(interval, pi4j, pms7003Device);
 		
 		String bme680Name = bme680.getName();
+		String pms7003Name = pms7003.getName();
 		String broker = config.getMqttBroker();
 		String prefix = config.getMqttDiscoveryPrefix();
 		
 		SensorDataHandler bme680DataHandler = new SensorDataHandler(bme680Name);
+		SensorDataHandler pms7003DataHandler = new SensorDataHandler(pms7003Name);
 		
 		bme680DataHandler.setMqttConfig(broker, prefix);
+		pms7003DataHandler.setMqttConfig(broker, prefix);
 		try {
 			bme680DataHandler.initMqtt();
+			pms7003DataHandler.initMqtt();
 		} catch (MqttException e) {
 			LOGGER.error("MQTT initialization error");
 		}
 		
 		bme680.addListener(bme680DataHandler);
-	    Thread thread = new Thread(bme680);
-	    thread.start();
+		pms7003.addListener(pms7003DataHandler);
+		
+	    Thread bme680Thread = new Thread(bme680);
+	    bme680Thread.start();
+	    Thread pms7003Thread = new Thread(pms7003);
+	    pms7003Thread.start();
 	    
 	    
 	    while(true) {
