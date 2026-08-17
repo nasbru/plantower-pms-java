@@ -35,6 +35,14 @@ public class Config {
 		}
 	}
 	
+	public boolean isBme680Enabled() {
+		return Boolean.parseBoolean(properties.getProperty("bme680.enabled", "true"));
+	}
+	
+	public boolean isPms7003Enabled() {
+		return Boolean.parseBoolean(properties.getProperty("pms7003.enabled", "true"));
+	}
+	
 	public String getAppInterval() {
 		return properties.getProperty("app.interval", "30");
 	}
