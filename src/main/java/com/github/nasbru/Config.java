@@ -34,6 +34,10 @@ public class Config {
 			LOGGER.error("Error while reading config file.");
 		}
 	}
+	
+	public String getAppInterval() {
+		return properties.getProperty("app.interval", "30");
+	}
 
 	public String getMqttBroker() {
 		return properties.getProperty("mqtt.broker", "tcp://localhost:1883");

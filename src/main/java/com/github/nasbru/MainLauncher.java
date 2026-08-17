@@ -18,7 +18,7 @@ public class MainLauncher {
 		Context pi4j = Pi4J.newAutoContext();
 		
 		Config config = new Config();
-		int interval = 30;
+		int interval = Integer.parseInt(config.getAppInterval());
 		String pms7003Device = config.getPms7003Device();
 		
 		BME680Reader bme680 = new BME680Reader(interval, config);
@@ -46,67 +46,24 @@ public class MainLauncher {
 		
 	    Thread bme680Thread = new Thread(bme680);
 	    bme680Thread.start();
-	    Thread pms7003Thread = new Thread(pms7003);
-	    pms7003Thread.start();
+	    
+	    pms7003.start();
 	    
 	    
-	    while(true) {
-			try {
-				Thread.sleep(5000);
-			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-		}
-		/*
-		SensorDataHandler sdh = null;
-		int maxAttempts = 5;
-		int attempt = 0;
-		long retryDelayMs = 5000;
+	 // Keep application running
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            LOGGER.info("Shutting down...");
+            bme680.stopReading();
+            pms7003.stop();
+            pi4j.shutdown();
+        }));
 
-		while (attempt < maxAttempts) {
-		    attempt++;
-		    try {
-		        sdh = new SensorDataHandler(mqttBroker, mqttClientId, mqttBaseTopic, reader);
-		        break; // attempt successful
-		    } catch (MqttException e) {
-		        LOGGER.error("MQTT connect failed (attempt " + attempt + "): ", e.getMessage());
-		        if (attempt >= maxAttempts) {
-		            LOGGER.error("Max attempts reached. Exiting.");
-		            System.exit(1);
-		        }
-		        try {
-		            Thread.sleep(retryDelayMs);
-		        } catch (InterruptedException ie) {
-		            Thread.currentThread().interrupt();
-		            break;
-		        }
-		    }
-		}
-
-		if (sdh != null) {
-		    String discoveryPrefix = config.getMqttDiscoveryPrefix();
-		    String nodeId = config.getNodeId(sensorName);
-		    sdh.setDiscoveryConfig(discoveryPrefix, nodeId);
-		    
-		    try {
-				sdh.publishDiscovery(discoveryPrefix, nodeId);
-			} catch (MqttException e) {
-				LOGGER.warn("Failed to publish discovery on startup", e);
-			}
-			
-		    reader.addListener(sdh);
-		    Thread thread = new Thread(reader);
-		    thread.start();
-		}
-		
-		while(true) {
-			try {
-				Thread.sleep(5000);
-			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-		} */
+        // Wait indefinitely
+        try {
+            Thread.currentThread().join();
+        } catch (InterruptedException e) {
+            LOGGER.error("Main thread interrupted", e);
+            Thread.currentThread().interrupt();
+        }
 	}
 }

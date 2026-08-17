@@ -26,7 +26,7 @@ import com.github.nasbru.measurements.PM2_5;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class PMS7003 implements Runnable {
+public class PMS7003 {
 	private final Serial serial;
 	private static final Logger LOGGER = LoggerFactory.getLogger(PMS7003.class);
 	private static final int MEASUREMENT_FRAME_LENGTH = 32;
@@ -70,8 +70,8 @@ public class PMS7003 implements Runnable {
 		}
 	}
 
-	@Override
-	public void run() {
+	
+	public void start() {
 		future = scheduler.scheduleAtFixedRate(() -> {
 			LOGGER.debug("scheduled task: start");
 
@@ -83,6 +83,17 @@ public class PMS7003 implements Runnable {
 
 			LOGGER.debug("scheduled task: end");
 		}, 30, interval, TimeUnit.SECONDS);
+	}
+	
+	public void stop() {
+		if (future != null) {
+			future.cancel(true);
+			future = null;
+		}
+		
+		if (scheduler != null) {
+			scheduler.shutdownNow();
+		}
 	}
 
 	public String getName() {
