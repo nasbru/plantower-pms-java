@@ -4,10 +4,6 @@ import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -17,11 +13,6 @@ import com.pi4j.io.serial.Serial;
 import com.pi4j.io.serial.Parity;
 import com.pi4j.io.serial.StopBits;
 import com.pi4j.io.serial.FlowControl;
-import com.github.nasbru.SensorListener;
-import com.github.nasbru.measurements.Measurement;
-import com.github.nasbru.measurements.PM10;
-import com.github.nasbru.measurements.PM1_0;
-import com.github.nasbru.measurements.PM2_5;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,17 +20,9 @@ import org.slf4j.LoggerFactory;
 public class PMS7003 {
 	private final Serial serial;
 	private static final Logger LOGGER = LoggerFactory.getLogger(PMS7003.class);
-	private static final int MEASUREMENT_FRAME_LENGTH = 32;
-	private ScheduledExecutorService scheduler;
-	private ScheduledFuture<?> future;
-	private int interval;
+	private static final int MEASUREMENT_FRAME_LENGTH = 32; // standard PMS7003 frame length
 
-	private ArrayList<SensorListener> listeners;
-
-	public PMS7003(int period, Context pi4j, String serialAddress) {
-		listeners = new ArrayList<>();
-		scheduler = Executors.newScheduledThreadPool(1);
-		this.interval = period;
+	public PMS7003(Context pi4j, String serialAddress, Set<String> allowedMeasurements) {
 
 		if (pi4j == null) {
 			throw new IllegalArgumentException("pi4j Context must not be null");
@@ -70,36 +53,6 @@ public class PMS7003 {
 		}
 	}
 
-	
-	public void start() {
-		future = scheduler.scheduleAtFixedRate(() -> {
-			LOGGER.debug("scheduled task: start");
-
-			Measurement[] measurement = getMeasurements();
-			notifyListeners(measurement);
-			for (Measurement m : measurement) {
-				LOGGER.debug(m.toString());
-			}
-
-			LOGGER.debug("scheduled task: end");
-		}, 30, interval, TimeUnit.SECONDS);
-	}
-	
-	public void stop() {
-		if (future != null) {
-			future.cancel(true);
-			future = null;
-		}
-		
-		if (scheduler != null) {
-			scheduler.shutdownNow();
-		}
-	}
-
-	public String getName() {
-		return "PMS7003";
-	}
-
 	public boolean isOpen() {
 		return serial.isOpen();
 	}
@@ -112,36 +65,90 @@ public class PMS7003 {
 		return serial.read(buffer, offset, amount);
 	}
 
-	public boolean activeMode() throws InterruptedException {
-		boolean success = false;
+	private boolean sendModeCommand(String modeName, byte[] request, byte[] expectedResponse)
+			throws InterruptedException {
+		LOGGER.debug("Setting sensor to {} mode...", modeName);
+
 		serial.drain();
-		serial.write(Command.ACTIVE_MODE.getRequest());
+		serial.write(request);
+
 		byte[] response = new byte[8];
 		readFully(response, 0, response.length, 2000);
-		LOGGER.debug("Setting sensor to active mode...");
-		if (Arrays.equals(response, Command.ACTIVE_MODE.getResponse())) {
+
+		if (Arrays.equals(response, expectedResponse)) {
 			LOGGER.debug("Success");
-			success = true;
+			return true;
 		} else {
 			LOGGER.debug("Failure - response={}", Arrays.toString(response));
+			return false;
 		}
-		return success;
 	}
 
-	public boolean passiveMode() throws InterruptedException {
-		boolean success = false;
-		serial.drain();
-		serial.write(Command.PASSIVE_MODE.getRequest());
-		byte[] response = new byte[8];
-		readFully(response, 0, response.length, 2000);
-		LOGGER.debug("Setting sensor to passive mode...");
-		if (Arrays.equals(response, Command.PASSIVE_MODE.getResponse())) {
-			LOGGER.debug("Success");
-			success = true;
-		} else {
-			LOGGER.debug("Failure - response={}", Arrays.toString(response));
+	private boolean activeModeOnce() throws InterruptedException {
+		return sendModeCommand("active", Command.ACTIVE_MODE.getRequest(), Command.ACTIVE_MODE.getResponse());
+	}
+
+	private boolean sleepOnce() throws InterruptedException {
+		return sendModeCommand("sleep", Command.SLEEP.getRequest(), Command.SLEEP.getResponse());
+	}
+
+	public boolean passiveMode(int retries) {
+		for (int i = 1; i <= retries; i++) {
+			LOGGER.debug("Setting sensor to passive mode, attempt {}/{}", i, retries);
+			try {
+				if (sendModeCommand("passive", Command.PASSIVE_MODE.getRequest(), Command.PASSIVE_MODE.getResponse())) {
+					LOGGER.debug("Passive mode enabled");
+					return true;
+				}
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				LOGGER.debug("Passive mode interrupted");
+				return false;
+			}
 		}
-		return success;
+		LOGGER.debug("Failed to enable passive mode after {} attempts", retries);
+		return false;
+	}
+
+	public boolean activeMode(int retries) {
+		for (int i = 1; i <= retries; i++) {
+			LOGGER.debug("Setting sensor to active mode, attempt {}/{}", i, retries);
+			try {
+				if (sendModeCommand("active", Command.ACTIVE_MODE.getRequest(), Command.ACTIVE_MODE.getResponse())) {
+					LOGGER.debug("Active mode enabled");
+					return true;
+				}
+				LOGGER.debug("Active mode failed on attempt {}", i);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				LOGGER.debug("Active mode interrupted");
+				return false;
+			}
+		}
+
+		LOGGER.debug("Failed to enable active mode after {} attempts", retries);
+		return false;
+	}
+	
+	public boolean sleep(int retries) {
+		
+		for (int i = 1; i <= retries; i++) {
+			LOGGER.debug("Sending sensor to sleep, attempt {}/{}", i, retries);
+			try {
+				if (sendModeCommand("sleep", Command.SLEEP.getRequest(), Command.SLEEP.getResponse())) {
+					LOGGER.debug("Sensor is now in sleep mode");
+					return true;
+				}
+				LOGGER.debug("Sleep command failed on attempt {}", i);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				LOGGER.debug("Sleep command interrupted");
+				return false;
+			}
+		}
+
+		LOGGER.debug("Failed to send sensor to sleep after {} attempts", retries);
+		return false;
 	}
 
 	private byte[] passiveMeasurement() throws InterruptedException {
@@ -154,7 +161,8 @@ public class PMS7003 {
 		LOGGER.debug("Received measurement frame: {}", Arrays.toString(frame));
 		return frame;
 	}
-
+	
+	/*
 	public synchronized void sleep() throws InterruptedException {
 		serial.drain();
 		serial.write(Command.SLEEP.getRequest());
@@ -165,8 +173,8 @@ public class PMS7003 {
 			LOGGER.debug("Success");
 		} else {
 			LOGGER.debug("Failure");
-		}
-	}
+		} 
+	} */
 
 	public synchronized void wakeUp() throws InterruptedException {
 		LOGGER.debug("Waking up the sensor...");
@@ -229,7 +237,8 @@ public class PMS7003 {
 		}
 	}
 
-	public Measurement[] getMeasurements() {
+	public int[] getMeasurements() {
+		int[] invalidMeasurements = new int[3];
 		final int maxAttempts = 50;
 		try {
 			byte[] frame = null;
@@ -247,14 +256,14 @@ public class PMS7003 {
 
 			if (frame == null || !isFrameValid(frame)) {
 				LOGGER.warn("Failed to receive a valid measurement frame after {} attempts", maxAttempts);
-				return new Measurement[0];
+				return invalidMeasurements;
 			}
 
 			return processFrame(frame);
 		} catch (InterruptedException e) {
 			LOGGER.error("Interrupted while getting data: {}", e.toString());
 			Thread.currentThread().interrupt();
-			return new Measurement[0];
+			return invalidMeasurements;
 		}
 	}
 
@@ -286,12 +295,10 @@ public class PMS7003 {
 		}
 
 		if (frame[0] != 0x42 || frame[1] != 0x4d) {
-			String pattern = "[%s,%s].";
 			return false;
 		}
 
-		int length = (((frame[2] & 0xFF) << 8) | (frame[3] & 0xFF)) + 4; // length field + 4 bytes header/length ==
-		// total
+		int length = (((frame[2] & 0xFF) << 8) | (frame[3] & 0xFF)) + 4; // length field + 4 bytes header/length = total
 		if (length != MEASUREMENT_FRAME_LENGTH) {
 			return false;
 		}
@@ -307,29 +314,14 @@ public class PMS7003 {
 		return isChecksumValid;
 	}
 
-	private Measurement[] processFrame(byte[] frame) {
-		List<Measurement> result = new ArrayList<>();
-
-		// Extract PM1.0, PM2.5, PM10 data from the frame
+	private int[] processFrame(byte[] frame) {
 		int pm1_0 = (frame[10] << 8) | (frame[11] & 0xFF);
 		int pm2_5 = (frame[12] << 8) | (frame[13] & 0xFF);
 		int pm10 = (frame[14] << 8) | (frame[15] & 0xFF);
 
-		result.add(new PM1_0(pm1_0));
-		result.add(new PM2_5(pm2_5));
-		result.add(new PM10(pm10));
+		int[] measurements = { pm1_0, pm2_5, pm10 };
 
-		return result.toArray(new Measurement[0]);
-	}
-
-	public void addListener(SensorListener listener) {
-		listeners.add(listener);
-	}
-
-	protected void notifyListeners(Measurement[] measurement) {
-		for (SensorListener listener : listeners) {
-			listener.onDataReceived(measurement);
-		}
+		return measurements;
 	}
 
 	private enum Command {
