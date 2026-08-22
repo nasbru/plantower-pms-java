@@ -45,6 +45,14 @@ public class PMSensor {
 		this.pi4j = pi4j;
 		this.serialAddress = serialAddress;
 	}
+	
+	public int available() {
+		return serial.available();
+	}
+	
+	public int read(byte[] bytes, int offset, int len) {
+		return serial.read(bytes, offset, len);
+	}
 
 	public void init() {
 		serial = pi4j.create(Serial.newConfigBuilder(pi4j).use_9600_N81().dataBits_8().parity(Parity.NONE)
@@ -235,7 +243,7 @@ public class PMSensor {
 		return totalRead;
 	}
 
-	private boolean isFrameValid(byte[] frame) {
+	protected boolean isFrameValid(byte[] frame) {
 		if (frame.length != MEASUREMENT_FRAME_LENGTH) {
 			return false;
 		}
@@ -260,7 +268,7 @@ public class PMSensor {
 		return isChecksumValid;
 	}
 
-	private int[] processFrame(byte[] frame) {
+	protected int[] processFrame(byte[] frame) {
 		int pm1_0 = (frame[10] << 8) | (frame[11] & 0xFF);
 		int pm2_5 = (frame[12] << 8) | (frame[13] & 0xFF);
 		int pm10 = (frame[14] << 8) | (frame[15] & 0xFF);
