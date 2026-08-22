@@ -1,4 +1,4 @@
-package com.github.nasbru.sensors;
+package com.github.nasbru;
 
 import java.util.Arrays;
 import java.nio.file.Files;
@@ -79,16 +79,6 @@ public class PMSensor {
 			try {
 				byte[] response = sendCommandAndReadFrame(request, expectedLen, timeoutMillis);
 
-				if (expectedResponse == null) {
-					if (response != null && response.length > 0) {
-						LOGGER.debug("{}: unexpected bytes received and ignored: {}", actionName,
-								Arrays.toString(response));
-					} else {
-						LOGGER.debug("{}: command sent, no response expected", actionName);
-					}
-					return true;
-				}
-
 				if (response != null && response.length == expectedResponse.length
 						&& Arrays.equals(response, expectedResponse)) {
 					LOGGER.debug("{} response: {}", actionName, Arrays.toString(response));
@@ -156,27 +146,6 @@ public class PMSensor {
 		LOGGER.debug("Received measurement frame: {}", Arrays.toString(frame));
 		return frame;
 	}
-
-	/*
-	 * public synchronized void sleep() throws InterruptedException {
-	 * serial.drain(); serial.write(Command.SLEEP.getRequest()); byte[] response =
-	 * new byte[8]; readFully(response, 0, response.length, 2000);
-	 * LOGGER.debug("Sending sensor to sleep..."); if (Arrays.equals(response,
-	 * Command.SLEEP.getResponse())) { LOGGER.debug("Success"); } else {
-	 * LOGGER.debug("Failure"); } }
-	 * 
-	 * 
-	 * 
-	 * /* public synchronized void wakeUp() throws InterruptedException {
-	 * LOGGER.debug("Waking up the sensor...");
-	 * serial.write(Command.WAKE_UP.getRequest()); // Wake up may not return an
-	 * 8-byte response reliably; don't block forever if (serial.available() >= 8) {
-	 * byte[] response = new byte[8]; readFully(response, 0, response.length, 2000);
-	 * LOGGER.debug("Wake response: {}", Arrays.toString(response)); } }
-	 * 
-	 * public synchronized void reset() throws InterruptedException { sleep();
-	 * Thread.sleep(1000); wakeUp(); }
-	 */
 
 	// Check whether the given serial device file exists and is readable.
 	public static boolean deviceFileExists(String devicePath) {
