@@ -1,9 +1,6 @@
 package com.github.nasbru.sensors;
 
 import java.util.Arrays;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -18,11 +15,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class PMS7003 {
-	private final Serial serial;
 	private static final Logger LOGGER = LoggerFactory.getLogger(PMS7003.class);
-	private static final int MEASUREMENT_FRAME_LENGTH = 32; // standard PMS7003 frame length
+	private static final int MEASUREMENT_FRAME_LENGTH = 32;
+	private static final int DEFAULT_RETRIES = 10;
+	private static final int MODE_CMD_TIMEOUT_MS = 2000;
+	private static final int MEASUREMENT_TIMEOUT_MS = 3000;
 
-	public PMS7003(Context pi4j, String serialAddress, Set<String> allowedMeasurements) {
+	private final Context pi4j;
+	private final String serialAddress;
+	private Serial serial;
+
+	public PMS7003(Context pi4j, String serialAddress) {
 
 		if (pi4j == null) {
 			throw new IllegalArgumentException("pi4j Context must not be null");
@@ -39,159 +42,141 @@ public class PMS7003 {
 			throw new IllegalStateException("Cannot open serial port (probe failed): " + serialAddress);
 		}
 
+		this.pi4j = pi4j;
+		this.serialAddress = serialAddress;
+	}
+
+	public void init() {
 		serial = pi4j.create(Serial.newConfigBuilder(pi4j).use_9600_N81().dataBits_8().parity(Parity.NONE)
 				.stopBits(StopBits._1).flowControl(FlowControl.NONE).id("PMS7003Device").device(serialAddress)
 				.provider("pigpio-serial").build());
 
 		serial.open();
-
-		try {
-			passiveMode();
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+		
+		wakeUp(); // In case the sensor was left in sleep mode
 	}
 
-	public boolean isOpen() {
-		return serial.isOpen();
-	}
-
-	public int available() {
-		return serial.available();
-	}
-
-	public int read(byte[] buffer, int offset, int amount) {
-		return serial.read(buffer, offset, amount);
-	}
-
-	private boolean sendModeCommand(String modeName, byte[] request, byte[] expectedResponse)
+	private byte[] sendCommandAndReadFrame(byte[] request, int frameLength, int timeoutMillis)
 			throws InterruptedException {
-		LOGGER.debug("Setting sensor to {} mode...", modeName);
-
 		serial.drain();
 		serial.write(request);
 
-		byte[] response = new byte[8];
-		readFully(response, 0, response.length, 2000);
-
-		if (Arrays.equals(response, expectedResponse)) {
-			LOGGER.debug("Success");
-			return true;
-		} else {
-			LOGGER.debug("Failure - response={}", Arrays.toString(response));
-			return false;
+		byte[] frame = new byte[frameLength];
+		int read = readFully(frame, 0, frameLength, timeoutMillis);
+		if (read < frameLength) {
+			LOGGER.debug("Partial frame read ({} / {}) for request {}", read, frameLength, Arrays.toString(request));
+			return Arrays.copyOf(frame, read);
 		}
+		return frame;
 	}
 
-	private boolean activeModeOnce() throws InterruptedException {
-		return sendModeCommand("active", Command.ACTIVE_MODE.getRequest(), Command.ACTIVE_MODE.getResponse());
-	}
+	private boolean executeWithRetries(String actionName, byte[] request, byte[] expectedResponse, int retries,
+			int timeoutMillis) {
+		int expectedLen = (expectedResponse == null) ? 0 : expectedResponse.length;
 
-	private boolean sleepOnce() throws InterruptedException {
-		return sendModeCommand("sleep", Command.SLEEP.getRequest(), Command.SLEEP.getResponse());
+		for (int i = 1; i <= retries; i++) {
+			LOGGER.debug("Setting sensor to {}, attempt {}/{}", actionName, i, retries);
+			try {
+				byte[] response = sendCommandAndReadFrame(request, expectedLen, timeoutMillis);
+
+				if (expectedResponse == null) {
+					if (response != null && response.length > 0) {
+						LOGGER.debug("{}: unexpected bytes received and ignored: {}", actionName,
+								Arrays.toString(response));
+					} else {
+						LOGGER.debug("{}: command sent, no response expected", actionName);
+					}
+					return true;
+				}
+
+				if (response != null && response.length == expectedResponse.length
+						&& Arrays.equals(response, expectedResponse)) {
+					LOGGER.debug("{} response: {}", actionName, Arrays.toString(response));
+					return true;
+				} else {
+					LOGGER.debug("{} attempt {} failed: response={}", actionName, i, Arrays.toString(response));
+				}
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				LOGGER.debug("{} interrupted", actionName);
+				return false;
+			}
+		}
+		LOGGER.debug("Failed to set {} after {} attempts", actionName, retries);
+		return false;
 	}
 
 	public boolean passiveMode(int retries) {
-		for (int i = 1; i <= retries; i++) {
-			LOGGER.debug("Setting sensor to passive mode, attempt {}/{}", i, retries);
-			try {
-				if (sendModeCommand("passive", Command.PASSIVE_MODE.getRequest(), Command.PASSIVE_MODE.getResponse())) {
-					LOGGER.debug("Passive mode enabled");
-					return true;
-				}
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-				LOGGER.debug("Passive mode interrupted");
-				return false;
-			}
-		}
-		LOGGER.debug("Failed to enable passive mode after {} attempts", retries);
-		return false;
+		return executeWithRetries("passive mode", Command.PASSIVE_MODE.getRequest(), Command.PASSIVE_MODE.getResponse(),
+				retries, MODE_CMD_TIMEOUT_MS);
 	}
 
 	public boolean activeMode(int retries) {
-		for (int i = 1; i <= retries; i++) {
-			LOGGER.debug("Setting sensor to active mode, attempt {}/{}", i, retries);
-			try {
-				if (sendModeCommand("active", Command.ACTIVE_MODE.getRequest(), Command.ACTIVE_MODE.getResponse())) {
-					LOGGER.debug("Active mode enabled");
-					return true;
-				}
-				LOGGER.debug("Active mode failed on attempt {}", i);
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-				LOGGER.debug("Active mode interrupted");
-				return false;
-			}
-		}
-
-		LOGGER.debug("Failed to enable active mode after {} attempts", retries);
-		return false;
+		return executeWithRetries("active mode", Command.ACTIVE_MODE.getRequest(), Command.ACTIVE_MODE.getResponse(),
+				retries, MODE_CMD_TIMEOUT_MS);
 	}
-	
+
 	public boolean sleep(int retries) {
-		
-		for (int i = 1; i <= retries; i++) {
-			LOGGER.debug("Sending sensor to sleep, attempt {}/{}", i, retries);
+		return executeWithRetries("sleep", Command.SLEEP.getRequest(), Command.SLEEP.getResponse(), retries,
+				MODE_CMD_TIMEOUT_MS);
+	}
+
+	public void wakeUp(int retries) {
+		for (int i = 0; i < DEFAULT_RETRIES; i++) {
+			serial.drain();
+			serial.write(Command.WAKE_UP.getRequest());
 			try {
-				if (sendModeCommand("sleep", Command.SLEEP.getRequest(), Command.SLEEP.getResponse())) {
-					LOGGER.debug("Sensor is now in sleep mode");
-					return true;
-				}
-				LOGGER.debug("Sleep command failed on attempt {}", i);
+				Thread.sleep(100);
 			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-				LOGGER.debug("Sleep command interrupted");
-				return false;
+				LOGGER.warn("Wake up delay interrupted: {}", e.toString());
 			}
 		}
+	}
 
-		LOGGER.debug("Failed to send sensor to sleep after {} attempts", retries);
-		return false;
+	public boolean passiveMode() {
+		return passiveMode(DEFAULT_RETRIES);
+	}
+
+	public boolean activeMode() {
+		return activeMode(DEFAULT_RETRIES);
+	}
+
+	public boolean sleep() {
+		return sleep(DEFAULT_RETRIES);
+	}
+
+	public void wakeUp() {
+		wakeUp(DEFAULT_RETRIES);
 	}
 
 	private byte[] passiveMeasurement() throws InterruptedException {
-		serial.drain();
-		serial.write(Command.PASSIVE_MEASUREMENT.getRequest());
-		// Wait for a full measurement frame (32 bytes) with timeout
-		byte[] frame = new byte[MEASUREMENT_FRAME_LENGTH];
-		readFully(frame, 0, MEASUREMENT_FRAME_LENGTH, 3000);
+		byte[] frame = sendCommandAndReadFrame(Command.PASSIVE_MEASUREMENT.getRequest(), MEASUREMENT_FRAME_LENGTH,
+				MEASUREMENT_TIMEOUT_MS);
 
 		LOGGER.debug("Received measurement frame: {}", Arrays.toString(frame));
 		return frame;
 	}
-	
+
 	/*
-	public synchronized void sleep() throws InterruptedException {
-		serial.drain();
-		serial.write(Command.SLEEP.getRequest());
-		byte[] response = new byte[8];
-		readFully(response, 0, response.length, 2000);
-		LOGGER.debug("Sending sensor to sleep...");
-		if (Arrays.equals(response, Command.SLEEP.getResponse())) {
-			LOGGER.debug("Success");
-		} else {
-			LOGGER.debug("Failure");
-		} 
-	} */
-
-	public synchronized void wakeUp() throws InterruptedException {
-		LOGGER.debug("Waking up the sensor...");
-		serial.write(Command.WAKE_UP.getRequest());
-		// Wake up may not return an 8-byte response reliably; don't block forever
-		if (serial.available() >= 8) {
-			byte[] response = new byte[8];
-			readFully(response, 0, response.length, 2000);
-			LOGGER.debug("Wake response: {}", Arrays.toString(response));
-		}
-	}
-
-	public synchronized void reset() throws InterruptedException {
-		sleep();
-		Thread.sleep(1000);
-		wakeUp();
-	}
+	 * public synchronized void sleep() throws InterruptedException {
+	 * serial.drain(); serial.write(Command.SLEEP.getRequest()); byte[] response =
+	 * new byte[8]; readFully(response, 0, response.length, 2000);
+	 * LOGGER.debug("Sending sensor to sleep..."); if (Arrays.equals(response,
+	 * Command.SLEEP.getResponse())) { LOGGER.debug("Success"); } else {
+	 * LOGGER.debug("Failure"); } }
+	 * 
+	 * 
+	 * 
+	 * /* public synchronized void wakeUp() throws InterruptedException {
+	 * LOGGER.debug("Waking up the sensor...");
+	 * serial.write(Command.WAKE_UP.getRequest()); // Wake up may not return an
+	 * 8-byte response reliably; don't block forever if (serial.available() >= 8) {
+	 * byte[] response = new byte[8]; readFully(response, 0, response.length, 2000);
+	 * LOGGER.debug("Wake response: {}", Arrays.toString(response)); } }
+	 * 
+	 * public synchronized void reset() throws InterruptedException { sleep();
+	 * Thread.sleep(1000); wakeUp(); }
+	 */
 
 	// Check whether the given serial device file exists and is readable.
 	public static boolean deviceFileExists(String devicePath) {
@@ -237,33 +222,26 @@ public class PMS7003 {
 		}
 	}
 
-	public int[] getMeasurements() {
-		int[] invalidMeasurements = new int[3];
+	public int[] tryGetMeasurements() {
 		final int maxAttempts = 50;
-		try {
-			byte[] frame = null;
-			int attempts = 0;
-			do {
-				frame = passiveMeasurement();
-				attempts++;
-				if (isFrameValid(frame)) {
-					break;
-				} else {
-					LOGGER.debug("Invalid measurement frame received (attempt {}/{}) - {}", attempts, maxAttempts,
-							Arrays.toString(frame));
-				}
-			} while (attempts < maxAttempts);
 
-			if (frame == null || !isFrameValid(frame)) {
-				LOGGER.warn("Failed to receive a valid measurement frame after {} attempts", maxAttempts);
-				return invalidMeasurements;
+		try {
+			for (int attempts = 1; attempts <= maxAttempts; attempts++) {
+				byte[] frame = passiveMeasurement();
+				if (isFrameValid(frame)) {
+					if (attempts > 1) {
+						LOGGER.debug("Measurement frame received after {} attempts", attempts);
+					}
+					return processFrame(frame);
+				}
 			}
 
-			return processFrame(frame);
+			throw new MeasurementReadException(
+					"Failed to receive a valid measurement frame after " + maxAttempts + " attempts");
+
 		} catch (InterruptedException e) {
-			LOGGER.error("Interrupted while getting data: {}", e.toString());
 			Thread.currentThread().interrupt();
-			return invalidMeasurements;
+			throw new MeasurementReadException("Interrupted while getting measurements", e);
 		}
 	}
 
@@ -366,6 +344,18 @@ public class PMS7003 {
 
 		public byte[] getResponse() {
 			return response;
+		}
+	}
+
+	public class MeasurementReadException extends RuntimeException {
+		private static final long serialVersionUID = 1L;
+
+		public MeasurementReadException(String message) {
+			super(message);
+		}
+
+		public MeasurementReadException(String message, Throwable cause) {
+			super(message, cause);
 		}
 	}
 }
