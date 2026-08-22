@@ -14,8 +14,8 @@ import com.pi4j.io.serial.FlowControl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class PMS7003 {
-	private static final Logger LOGGER = LoggerFactory.getLogger(PMS7003.class);
+public class PMSensor {
+	private static final Logger LOGGER = LoggerFactory.getLogger(PMSensor.class);
 	private static final int MEASUREMENT_FRAME_LENGTH = 32;
 	private static final int DEFAULT_RETRIES = 10;
 	private static final int MODE_CMD_TIMEOUT_MS = 2000;
@@ -25,7 +25,7 @@ public class PMS7003 {
 	private final String serialAddress;
 	private Serial serial;
 
-	public PMS7003(Context pi4j, String serialAddress) {
+	public PMSensor(Context pi4j, String serialAddress) {
 
 		if (pi4j == null) {
 			throw new IllegalArgumentException("pi4j Context must not be null");
@@ -48,11 +48,11 @@ public class PMS7003 {
 
 	public void init() {
 		serial = pi4j.create(Serial.newConfigBuilder(pi4j).use_9600_N81().dataBits_8().parity(Parity.NONE)
-				.stopBits(StopBits._1).flowControl(FlowControl.NONE).id("PMS7003Device").device(serialAddress)
+				.stopBits(StopBits._1).flowControl(FlowControl.NONE).id("PMSensor").device(serialAddress)
 				.provider("pigpio-serial").build());
 
 		serial.open();
-		
+
 		wakeUp(); // In case the sensor was left in sleep mode
 	}
 
@@ -222,7 +222,7 @@ public class PMS7003 {
 		}
 	}
 
-	public int[] tryGetMeasurements() {
+	public int[] getMeasurements() {
 		final int maxAttempts = 50;
 
 		try {
@@ -235,7 +235,6 @@ public class PMS7003 {
 					return processFrame(frame);
 				}
 			}
-
 			throw new MeasurementReadException(
 					"Failed to receive a valid measurement frame after " + maxAttempts + " attempts");
 
