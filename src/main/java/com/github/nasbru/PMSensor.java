@@ -243,7 +243,7 @@ public class PMSensor {
 		return totalRead;
 	}
 
-	protected boolean isFrameValid(byte[] frame) {
+	private boolean isFrameValid(byte[] frame) {
 		if (frame.length != MEASUREMENT_FRAME_LENGTH) {
 			return false;
 		}
@@ -268,7 +268,7 @@ public class PMSensor {
 		return isChecksumValid;
 	}
 
-	protected int[] processFrame(byte[] frame) {
+	private int[] processFrame(byte[] frame) {
 		int pm1_0 = (frame[10] << 8) | (frame[11] & 0xFF);
 		int pm2_5 = (frame[12] << 8) | (frame[13] & 0xFF);
 		int pm10 = (frame[14] << 8) | (frame[15] & 0xFF);
