@@ -12,7 +12,7 @@ public class Main {
 	private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
 
 	public static void main(String[] args) {
-		String serialAddress = args.length > 0 ? args[0] : "/dev/ttyS0";
+		String serialAddress = args.length > 0 ? args[0] : "/dev/ttyUSB0";
 		int intervalSeconds = args.length > 1 ? Integer.parseInt(args[1]) : 10;
 
 		try (PMSensor sensor = new PMSensor(serialAddress)) {
@@ -35,7 +35,7 @@ public class Main {
 			scheduler.scheduleAtFixedRate(pollTask, 0, intervalSeconds, TimeUnit.SECONDS);
 
 			Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-				LOGGER.info("Shutdown requested, stopping scheduler and Pi4J...");
+				LOGGER.info("Shutdown requested, stopping scheduler and closing serial connection...");
 				scheduler.shutdown();
 				try {
 					if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
