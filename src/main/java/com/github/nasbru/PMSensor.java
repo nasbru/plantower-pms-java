@@ -5,14 +5,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.fazecast.jSerialComm.SerialPort;
 
 public class PMSensor implements AutoCloseable {
-
-	private static final Logger LOGGER = LoggerFactory.getLogger(PMSensor.class);
 
 	private static final int MEASUREMENT_FRAME_LENGTH = 32;
 	private static final int DEFAULT_RETRIES = 10;
@@ -28,12 +23,10 @@ public class PMSensor implements AutoCloseable {
 		}
 
 		if (!deviceFileExists(serialAddress)) {
-			LOGGER.warn("Device file {} does not exist or is not readable", serialAddress);
 			throw new IllegalArgumentException("Device file not found or not readable: " + serialAddress);
 		}
 
 		if (!canOpenPort(serialAddress)) {
-			LOGGER.warn("Cannot open port {} during probe", serialAddress);
 			throw new IllegalStateException("Cannot open serial port: " + serialAddress);
 		}
 
@@ -56,7 +49,7 @@ public class PMSensor implements AutoCloseable {
 	}
 
 	public boolean passiveMode(int retries) {
-		return executeWithRetries("passive mode", Command.PASSIVE_MODE.getRequest(), Command.PASSIVE_MODE.getResponse(),
+		return executeWithRetries(Command.PASSIVE_MODE.getRequest(), Command.PASSIVE_MODE.getResponse(),
 				retries, MODE_CMD_TIMEOUT_MS);
 	}
 
@@ -65,7 +58,7 @@ public class PMSensor implements AutoCloseable {
 	}
 
 	public boolean activeMode(int retries) {
-		return executeWithRetries("active mode", Command.ACTIVE_MODE.getRequest(), Command.ACTIVE_MODE.getResponse(),
+		return executeWithRetries(Command.ACTIVE_MODE.getRequest(), Command.ACTIVE_MODE.getResponse(),
 				retries, MODE_CMD_TIMEOUT_MS);
 	}
 
@@ -74,7 +67,7 @@ public class PMSensor implements AutoCloseable {
 	}
 
 	public boolean sleep(int retries) {
-		return executeWithRetries("sleep", Command.SLEEP.getRequest(), Command.SLEEP.getResponse(), retries,
+		return executeWithRetries(Command.SLEEP.getRequest(), Command.SLEEP.getResponse(), retries,
 				MODE_CMD_TIMEOUT_MS);
 	}
 
@@ -93,7 +86,6 @@ public class PMSensor implements AutoCloseable {
 				Thread.sleep(100);
 			} catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
-				LOGGER.warn("Wake-up delay interrupted", e);
 				return;
 			}
 		}
@@ -111,10 +103,6 @@ public class PMSensor implements AutoCloseable {
 				byte[] frame = passiveMeasurement();
 
 				if (isFrameValid(frame)) {
-					if (attempts > 1) {
-						LOGGER.debug("Measurement frame received after {} attempts", attempts);
-					}
-
 					return processFrame(frame);
 				}
 			}
@@ -128,45 +116,32 @@ public class PMSensor implements AutoCloseable {
 		}
 	}
 
-	private boolean executeWithRetries(String actionName, byte[] request, byte[] expectedResponse, int retries,
-			int timeoutMillis) {
+	private boolean executeWithRetries(byte[] request, byte[] expectedResponse, int retries, int timeoutMillis) {
 
 		if (retries <= 0) {
 			return false;
 		}
 
 		for (int i = 1; i <= retries; i++) {
-			LOGGER.debug("Setting sensor to {}, attempt {}/{}", actionName, i, retries);
-
 			try {
 				byte[] response = sendCommandAndReadFrame(request, expectedResponse.length, timeoutMillis);
 
 				if (Arrays.equals(response, expectedResponse)) {
-					LOGGER.debug("{} response: {}", actionName, Arrays.toString(response));
 					return true;
 				}
 
-				LOGGER.debug("{} attempt {} failed: response={}", actionName, i, Arrays.toString(response));
-
 			} catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
-				LOGGER.debug("{} interrupted", actionName);
 				return false;
 			}
 		}
-
-		LOGGER.debug("Failed to set {} after {} attempts", actionName, retries);
 
 		return false;
 	}
 
 	private byte[] passiveMeasurement() throws InterruptedException {
-		byte[] frame = sendCommandAndReadFrame(Command.PASSIVE_MEASUREMENT.getRequest(), MEASUREMENT_FRAME_LENGTH,
+		return sendCommandAndReadFrame(Command.PASSIVE_MEASUREMENT.getRequest(), MEASUREMENT_FRAME_LENGTH,
 				MEASUREMENT_TIMEOUT_MS);
-
-		LOGGER.debug("Received measurement frame: {}", Arrays.toString(frame));
-
-		return frame;
 	}
 
 	private byte[] sendCommandAndReadFrame(byte[] request, int frameLength, int timeoutMillis)
@@ -179,8 +154,6 @@ public class PMSensor implements AutoCloseable {
 		int read = readFully(frame, 0, frameLength, timeoutMillis);
 
 		if (read < frameLength) {
-			LOGGER.debug("Partial frame read ({} / {}) for request {}", read, frameLength, Arrays.toString(request));
-
 			return Arrays.copyOf(frame, read);
 		}
 
@@ -314,7 +287,6 @@ public class PMSensor implements AutoCloseable {
 			return Files.exists(path) && Files.isReadable(path) && !Files.isDirectory(path);
 
 		} catch (Exception e) {
-			LOGGER.debug("deviceFileExists check failed for {}: {}", devicePath, e.toString());
 			return false;
 		}
 	}
@@ -333,7 +305,6 @@ public class PMSensor implements AutoCloseable {
 		try {
 			return probe.openPort();
 		} catch (Exception e) {
-			LOGGER.debug("Port probe failed for {}: {}", serialAddress, e.toString());
 			return false;
 		} finally {
 			if (probe.isOpen()) {
@@ -398,3 +369,4 @@ public class PMSensor implements AutoCloseable {
 		}
 	}
 }
+
