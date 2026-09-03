@@ -22,6 +22,8 @@ It configures the sensor to operate in passive mode and provides access to PM1.0
 
 - Java 17
 - Maven
+- Plantower PMS7003 or PMS5003 sensor
+- UART interface or USB–serial adapter
 
 ---
 
@@ -36,18 +38,6 @@ The build produces a JAR in the `target/` directory.
 ---
 
 ## Using the Library
-
-### Maven dependency
-
-Add to your `pom.xml`:
-
-```xml
-<dependency>
-    <groupId>com.github.nasbru</groupId>
-    <artifactId>pm-sensor</artifactId>
-    <version>0.0.6-SNAPSHOT</version>
-</dependency>
-```
 
 ### API overview
 
