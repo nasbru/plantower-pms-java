@@ -3,8 +3,7 @@
 A lightweight Java library for communicating with Plantower **PMS7003** and **PMS5003**
 particulate-matter sensors over a serial port.
 
-The core of the project is the `PMSensor` class, which handles communication with the sensor,
-configures it to operate in passive mode, and reads PM1.0, PM2.5, and PM10 measurements.
+It configures the sensor to operate in passive mode and provides access to PM1.0, PM2.5, and PM10 measurements.
 
 ---
 
@@ -208,9 +207,21 @@ Check the following:
 - TX/RX wiring
 - Common ground
 - Serial device path
-- Baud rate (9600 by default)
-- Serial read timeouts
 
+---
+
+## Notes
+
+- After power-up, the sensor starts in active mode by default.
+- After waking the sensor from sleep mode, allow the fan to run for at least
+  30 seconds before taking a measurement. For reading intervals of 30 seconds
+  or less, it is recommended not to put the sensor to sleep. Instead, keep it
+  awake.
+- Once the sensor has been switched from active mode to passive mode, switching
+  it back to active mode does not appear to work.
+- The library is intended to be used in passive mode, with measurements
+  triggered on demand.
+  
 ---
 
 ## License
