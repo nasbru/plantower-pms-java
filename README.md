@@ -221,6 +221,8 @@ Check the following:
   it back to active mode does not appear to work.
 - The library is intended to be used in passive mode, with measurements
   triggered on demand.
+- The library has been tested with the Plantower PMS7003 and PMS5003. Other Plantower PM sensor models may also be compatible, but they have not been explicitly tested.
+
   
 ---
 
