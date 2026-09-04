@@ -44,21 +44,13 @@ The build produces a JAR in the `target/` directory.
 The public API is provided by `com.github.nasbru.PMSensor`:
 
 | Method | Description |
-|---|---|
 | `PMSensor(String serialAddress)` | Constructor — validates device path and checks that the port can be opened |
-|---|---|
 | `init()` | Opens the serial port and wakes the sensor up |
-|---|---|
 | `passiveMode()` | Switches the sensor to passive (poll-on-demand) mode |
-|---|---|
 | `activeMode()` | Switches the sensor to active (continuous) mode |
-|---|---|
 | `sleep()` | Puts the sensor to sleep |
-|---|---|
 | `wakeUp()` | Wakes the sensor up |
-|---|---|
 | `getMeasurements()` | Returns `int[] { pm1_0, pm2_5, pm10 }` in µg/m³ |
-|---|---|
 | `close()` | Closes the serial port (`AutoCloseable`) |
 
 Each mode-switching method has an overload accepting a `retries` parameter. The default is 10 retries.
