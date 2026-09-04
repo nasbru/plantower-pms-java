@@ -4,8 +4,8 @@
 
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.github.nasbru</groupId>
-	<artifactId>pm-sensor</artifactId>
-	<version>0.0.7-SNAPSHOT</version>
+	<artifactId>plantower-pms-java</artifactId>
+	<version>0.1.0</version>
 
 	<build>
 		<plugins>
