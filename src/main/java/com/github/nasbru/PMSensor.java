@@ -11,6 +11,7 @@ public class PMSensor implements AutoCloseable {
 
 	private static final int MEASUREMENT_FRAME_LENGTH = 32;
 	private static final int DEFAULT_RETRIES = 10;
+	private static final int DEFAULT_MEASUREMENT_RETRIES = 50;
 	private static final int MODE_CMD_TIMEOUT_MS = 2000;
 	private static final int MEASUREMENT_TIMEOUT_MS = 3000;
 
@@ -38,7 +39,7 @@ public class PMSensor implements AutoCloseable {
 
 		serialPort.setComPortParameters(9600, 8, SerialPort.ONE_STOP_BIT, SerialPort.NO_PARITY);
 
-		// Używamy własnego timeoutu w readFully(), więc odczyt jest nieblokujący.
+		// We use our own timeout in readFully(), so the read is non-blocking.
 		serialPort.setComPortTimeouts(SerialPort.TIMEOUT_NONBLOCKING, 0, 0);
 
 		if (!serialPort.openPort()) {
@@ -95,11 +96,10 @@ public class PMSensor implements AutoCloseable {
 		wakeUp(DEFAULT_RETRIES);
 	}
 
-	public int[] getMeasurements() {
-		final int maxAttempts = 50;
+	public int[] getMeasurements(int retries) {
 
 		try {
-			for (int attempts = 1; attempts <= maxAttempts; attempts++) {
+			for (int attempts = 1; attempts <= retries; attempts++) {
 				byte[] frame = passiveMeasurement();
 
 				if (isFrameValid(frame)) {
@@ -108,12 +108,16 @@ public class PMSensor implements AutoCloseable {
 			}
 
 			throw new MeasurementReadException(
-					"Failed to receive a valid measurement frame after " + maxAttempts + " attempts");
+					"Failed to receive a valid measurement frame after " + retries + " attempts");
 
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 			throw new MeasurementReadException("Interrupted while getting measurements", e);
 		}
+	}
+	
+	public int[] getMeasurements() {
+		return getMeasurements(DEFAULT_MEASUREMENT_RETRIES);
 	}
 
 	private boolean executeWithRetries(byte[] request, byte[] expectedResponse, int retries, int timeoutMillis) {
@@ -195,7 +199,7 @@ public class PMSensor implements AutoCloseable {
 			return 0;
 		}
 
-		// readBytes() ma prostsze przeciążenie bez offsetu.
+		// readBytes() has a simpler overload without an offset.
 		byte[] temp = new byte[len];
 		int read = (int) serialPort.readBytes(temp, len);
 
