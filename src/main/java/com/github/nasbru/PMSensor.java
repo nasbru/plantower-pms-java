@@ -47,6 +47,14 @@ public class PMSensor implements AutoCloseable {
 		}
 
 		wakeUp();
+
+		// The sensor needs ~1 s after wake-up before it reliably accepts commands
+		// (otherwise passiveMode() right after init() may be silently ignored).
+		try {
+			Thread.sleep(1000);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		}
 	}
 
 	public boolean passiveMode(int retries) {
@@ -99,6 +107,12 @@ public class PMSensor implements AutoCloseable {
 	public int[] getMeasurements(int retries) {
 
 		try {
+			// Discard stale data accumulated in the RX buffer since the previous
+			// measurement cycle. This is done ONCE per call — the retry loop below
+			// must NOT clear the RX buffer, so that a misaligned frame window can
+			// slide across the stream until it hits a frame boundary (0x42 0x4D).
+			flush();
+
 			for (int attempts = 1; attempts <= retries; attempts++) {
 				byte[] frame = passiveMeasurement();
 
@@ -115,7 +129,7 @@ public class PMSensor implements AutoCloseable {
 			throw new MeasurementReadException("Interrupted while getting measurements", e);
 		}
 	}
-	
+
 	public int[] getMeasurements() {
 		return getMeasurements(DEFAULT_MEASUREMENT_RETRIES);
 	}
@@ -151,7 +165,9 @@ public class PMSensor implements AutoCloseable {
 	private byte[] sendCommandAndReadFrame(byte[] request, int frameLength, int timeoutMillis)
 			throws InterruptedException {
 
-		flush();
+		// No flush() here — clearing the RX buffer before every attempt resets the
+		// read position to a random phase of the stream and destroys frame-boundary
+		// resynchronization. Stale data is discarded once in getMeasurements().
 		write(request);
 
 		byte[] frame = new byte[frameLength];
@@ -373,4 +389,5 @@ public class PMSensor implements AutoCloseable {
 		}
 	}
 }
+
 
