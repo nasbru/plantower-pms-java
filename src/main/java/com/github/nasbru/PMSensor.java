@@ -126,9 +126,9 @@ public class PMSensor implements AutoCloseable {
 
 		try {
 			// Discard stale data accumulated in the RX buffer since the previous
-			// measurement cycle. This is done ONCE per call — the retry loop below
-			// must NOT clear the RX buffer, so that a misaligned frame window can
-			// slide across the stream until it hits a frame boundary (0x42 0x4D).
+			// measurement cycle. Done ONCE per call — the retry loop does not need
+			// to clear anything: readMeasurementFrame() scans the stream for the
+			// frame header (0x42 0x4D), so garbage and phase shifts are harmless.
 			flush();
 			System.out.println("getMeasurements(" + retries + "): start, RX buffer flushed");
 
@@ -192,8 +192,98 @@ public class PMSensor implements AutoCloseable {
 	}
 
 	private byte[] passiveMeasurement() throws InterruptedException {
-		return sendCommandAndReadFrame(Command.PASSIVE_MEASUREMENT.getRequest(), MEASUREMENT_FRAME_LENGTH,
-				MEASUREMENT_TIMEOUT_MS);
+		long start = System.currentTimeMillis();
+
+		// No flush() here — the measurement read does not depend on the buffer
+		// being clean or phase-aligned: readMeasurementFrame() scans the stream
+		// for the frame header (0x42 0x4D) and discards any garbage it finds.
+		write(Command.PASSIVE_MEASUREMENT.getRequest());
+
+		byte[] frame = readMeasurementFrame(MEASUREMENT_TIMEOUT_MS);
+		long elapsed = System.currentTimeMillis() - start;
+
+		System.out.println("passiveMeasurement: elapsed=" + elapsed + " ms, frame=" + toHex(frame));
+		return frame;
+	}
+
+	/**
+	 * Reads one complete measurement frame (32 bytes) directly from the byte
+	 * stream. Phase 1 scans byte-by-byte for the frame header (0x42 0x4D),
+	 * discarding garbage (noise bytes, stale data, misaligned leftovers) —
+	 * so the read window can never get stuck at a wrong phase. Phase 2 reads
+	 * the remaining 30 bytes of the frame. A fake header inside frame data is
+	 * caught later by the checksum in isFrameValid() and only costs one retry.
+	 * Returns the complete frame, a partial frame (timeout after the header),
+	 * or an empty array (timeout before any header).
+	 */
+	private byte[] readMeasurementFrame(long timeoutMillis) throws InterruptedException {
+
+		long deadline = System.currentTimeMillis() + timeoutMillis;
+		int state = 0;   // number of header bytes matched so far (0..1)
+		int garbage = 0; // bytes skipped before the header
+
+		while (System.currentTimeMillis() < deadline) {
+			int b = readSingleByte();
+
+			if (b < 0) {
+				Thread.sleep(10);
+				continue;
+			}
+
+			if (state == 0) {
+				if (b == 0x42) {
+					state = 1;
+				} else {
+					garbage++;
+				}
+			} else if (b == 0x4D) {
+				// Header found — read the rest of the frame.
+				if (garbage > 0) {
+					System.out.println("readMeasurementFrame: skipped " + garbage
+							+ " garbage byte(s) before header");
+				}
+
+				byte[] frame = new byte[MEASUREMENT_FRAME_LENGTH];
+				frame[0] = 0x42;
+				frame[1] = 0x4D;
+
+				long remaining = Math.max(1, deadline - System.currentTimeMillis());
+				int read = readFully(frame, 2, MEASUREMENT_FRAME_LENGTH - 2, remaining);
+
+				if (read < MEASUREMENT_FRAME_LENGTH - 2) {
+					System.out.println("readMeasurementFrame: WARNING - incomplete frame (read " + read
+							+ " of " + (MEASUREMENT_FRAME_LENGTH - 2) + " bytes after header)");
+					return Arrays.copyOf(frame, 2 + read);
+				}
+
+				return frame;
+
+			} else {
+				// The matched 0x42 was garbage after all. If this byte is itself
+				// 0x42, it becomes the new candidate (handles 42 42 4D streams).
+				garbage++;
+				state = (b == 0x42) ? 1 : 0;
+
+				if (state == 0) {
+					garbage++;
+				}
+			}
+		}
+
+		System.out.println("readMeasurementFrame: WARNING - header not found within timeout (skipped "
+				+ garbage + " garbage byte(s))");
+		return new byte[0];
+	}
+
+	private int readSingleByte() throws InterruptedException {
+		if (serialPort.bytesAvailable() <= 0) {
+			return -1;
+		}
+
+		byte[] one = new byte[1];
+		int read = read(one, 0, 1);
+
+		return read == 1 ? (one[0] & 0xFF) : -1;
 	}
 
 	private byte[] sendCommandAndReadFrame(byte[] request, int frameLength, int timeoutMillis)
@@ -201,9 +291,14 @@ public class PMSensor implements AutoCloseable {
 
 		long start = System.currentTimeMillis();
 
-		// No flush() here — clearing the RX buffer before every attempt resets the
-		// read position to a random phase of the stream and destroys frame-boundary
-		// resynchronization. Stale data is discarded once in getMeasurements().
+		// ACK path (passiveMode/activeMode/sleep): the RX buffer may hold stale
+		// bytes (active-mode frames, noise, wake-up leftovers). Reading them as
+		// the command response causes guaranteed mismatch, so clear the buffer
+		// before sending. Measurement frames must NOT use this method — they
+		// use readMeasurementFrame(), which is immune to phase misalignment.
+		flush();
+		System.out.println("sendCommandAndReadFrame: RX buffer flushed before ACK command");
+
 		write(request);
 
 		byte[] frame = new byte[frameLength];

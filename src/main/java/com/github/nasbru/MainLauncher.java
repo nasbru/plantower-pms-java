@@ -34,8 +34,12 @@ public class MainLauncher {
 			sensor.init();
 
 			if (!sensor.passiveMode()) {
-				System.out.println("MainLauncher: failed to switch to passive mode, exiting");
-				return;
+				// A failed ACK does not mean the mode switch failed — the command is
+				// idempotent and the ACK frame itself may have been corrupted on a noisy
+				// line (especially on long wires). A valid measurement frame will prove
+				// the mode anyway, so warn and continue instead of exiting.
+				System.out.println("MainLauncher: WARNING - no valid passive-mode ACK after retries,"
+						+ " continuing anyway (mode may already be passive)");
 			}
 
 			System.out.println("MainLauncher: entering measurement loop (Ctrl+C to stop)");
