@@ -41,11 +41,14 @@ public class PMSensor implements AutoCloseable {
 
 		// We use our own timeout in readFully(), so the read is non-blocking.
 		serialPort.setComPortTimeouts(SerialPort.TIMEOUT_NONBLOCKING, 0, 0);
+		System.out.println("init: port configured, baud=9600, 8N1, timeouts=NONBLOCKING");
 
 		if (!serialPort.openPort()) {
+			System.out.println("init: openPort() FAILED for " + serialAddress);
 			throw new IllegalStateException("Cannot open serial port: " + serialAddress);
 		}
 
+		System.out.println("init: openPort() OK");
 		wakeUp();
 
 		// The sensor needs ~1 s after wake-up before it reliably accepts commands
@@ -58,8 +61,11 @@ public class PMSensor implements AutoCloseable {
 	}
 
 	public boolean passiveMode(int retries) {
-		return executeWithRetries(Command.PASSIVE_MODE.getRequest(), Command.PASSIVE_MODE.getResponse(),
+		System.out.println("passiveMode(" + retries + "): start");
+		boolean result = executeWithRetries(Command.PASSIVE_MODE.getRequest(), Command.PASSIVE_MODE.getResponse(),
 				retries, MODE_CMD_TIMEOUT_MS);
+		System.out.println("passiveMode: result=" + result);
+		return result;
 	}
 
 	public boolean passiveMode() {
@@ -67,8 +73,11 @@ public class PMSensor implements AutoCloseable {
 	}
 
 	public boolean activeMode(int retries) {
-		return executeWithRetries(Command.ACTIVE_MODE.getRequest(), Command.ACTIVE_MODE.getResponse(),
+		System.out.println("activeMode(" + retries + "): start");
+		boolean result = executeWithRetries(Command.ACTIVE_MODE.getRequest(), Command.ACTIVE_MODE.getResponse(),
 				retries, MODE_CMD_TIMEOUT_MS);
+		System.out.println("activeMode: result=" + result);
+		return result;
 	}
 
 	public boolean activeMode() {
@@ -76,8 +85,11 @@ public class PMSensor implements AutoCloseable {
 	}
 
 	public boolean sleep(int retries) {
-		return executeWithRetries(Command.SLEEP.getRequest(), Command.SLEEP.getResponse(), retries,
+		System.out.println("sleep(" + retries + "): start");
+		boolean result = executeWithRetries(Command.SLEEP.getRequest(), Command.SLEEP.getResponse(), retries,
 				MODE_CMD_TIMEOUT_MS);
+		System.out.println("sleep: result=" + result);
+		return result;
 	}
 
 	public boolean sleep() {
@@ -85,6 +97,7 @@ public class PMSensor implements AutoCloseable {
 	}
 
 	public void wakeUp(int retries) {
+		System.out.println("wakeUp(" + retries + "): start");
 		ensureOpen();
 
 		for (int i = 0; i < retries; i++) {
@@ -95,9 +108,12 @@ public class PMSensor implements AutoCloseable {
 				Thread.sleep(100);
 			} catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
+				System.out.println("wakeUp: interrupted");
 				return;
 			}
 		}
+
+		System.out.println("wakeUp: done, sent " + retries + " wake-up commands");
 	}
 
 	public void wakeUp() {
@@ -105,6 +121,8 @@ public class PMSensor implements AutoCloseable {
 	}
 
 	public int[] getMeasurements(int retries) {
+		long startTime = System.currentTimeMillis();
+		int invalidFrames = 0;
 
 		try {
 			// Discard stale data accumulated in the RX buffer since the previous
@@ -112,13 +130,22 @@ public class PMSensor implements AutoCloseable {
 			// must NOT clear the RX buffer, so that a misaligned frame window can
 			// slide across the stream until it hits a frame boundary (0x42 0x4D).
 			flush();
+			System.out.println("getMeasurements(" + retries + "): start, RX buffer flushed");
 
 			for (int attempts = 1; attempts <= retries; attempts++) {
 				byte[] frame = passiveMeasurement();
 
 				if (isFrameValid(frame)) {
-					return processFrame(frame);
+					int[] values = processFrame(frame);
+					System.out.println("getMeasurements: OK on attempt " + attempts + "/" + retries
+							+ " (invalid frames so far: " + invalidFrames + ", total "
+							+ (System.currentTimeMillis() - startTime) + " ms), pm1.0=" + values[0]
+							+ " pm2.5=" + values[1] + " pm10=" + values[2]);
+					return values;
 				}
+
+				invalidFrames++;
+				logInvalidFrame(attempts, frame);
 			}
 
 			throw new MeasurementReadException(
@@ -145,15 +172,22 @@ public class PMSensor implements AutoCloseable {
 				byte[] response = sendCommandAndReadFrame(request, expectedResponse.length, timeoutMillis);
 
 				if (Arrays.equals(response, expectedResponse)) {
+					System.out.println("executeWithRetries: success on attempt " + i + "/" + retries);
 					return true;
 				}
 
+				System.out.println("executeWithRetries: attempt " + i + "/" + retries
+						+ " mismatch, expected=" + toHex(expectedResponse) + ", got=" + toHex(response));
+
 			} catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
+				System.out.println("executeWithRetries: interrupted on attempt " + i + "/" + retries);
 				return false;
 			}
 		}
 
+		System.out.println("executeWithRetries: FAILED after " + retries + " attempts, request="
+				+ toHex(request));
 		return false;
 	}
 
@@ -165,6 +199,8 @@ public class PMSensor implements AutoCloseable {
 	private byte[] sendCommandAndReadFrame(byte[] request, int frameLength, int timeoutMillis)
 			throws InterruptedException {
 
+		long start = System.currentTimeMillis();
+
 		// No flush() here — clearing the RX buffer before every attempt resets the
 		// read position to a random phase of the stream and destroys frame-boundary
 		// resynchronization. Stale data is discarded once in getMeasurements().
@@ -172,8 +208,14 @@ public class PMSensor implements AutoCloseable {
 
 		byte[] frame = new byte[frameLength];
 		int read = readFully(frame, 0, frameLength, timeoutMillis);
+		long elapsed = System.currentTimeMillis() - start;
+
+		System.out.println("sendCommandAndReadFrame: request=" + toHex(request) + ", expectedLen=" + frameLength
+				+ ", read=" + read + ", elapsed=" + elapsed + " ms, data=" + toHex(frame, read));
 
 		if (read < frameLength) {
+			System.out.println("sendCommandAndReadFrame: WARNING - incomplete frame (read " + read
+					+ " of " + frameLength + " bytes)");
 			return Arrays.copyOf(frame, read);
 		}
 
@@ -230,6 +272,7 @@ public class PMSensor implements AutoCloseable {
 		ensureOpen();
 
 		long written = serialPort.writeBytes(data, data.length);
+		System.out.println("write: " + written + "/" + data.length + " bytes written: " + toHex(data));
 		if (written != data.length) {
 			throw new IllegalStateException("Only " + written + " of " + data.length + " bytes were written");
 		}
@@ -247,16 +290,21 @@ public class PMSensor implements AutoCloseable {
 
 	private boolean isFrameValid(byte[] frame) {
 		if (frame == null || frame.length != MEASUREMENT_FRAME_LENGTH) {
+			System.out.println("isFrameValid: REJECTED - wrong length "
+					+ (frame == null ? "(null)" : frame.length) + ", expected " + MEASUREMENT_FRAME_LENGTH);
 			return false;
 		}
 
 		if ((frame[0] & 0xFF) != 0x42 || (frame[1] & 0xFF) != 0x4D) {
+			System.out.println("isFrameValid: REJECTED - bad header " + toHex(frame, 2) + ", expected 42 4D");
 			return false;
 		}
 
 		int length = (((frame[2] & 0xFF) << 8) | (frame[3] & 0xFF)) + 4;
 
 		if (length != MEASUREMENT_FRAME_LENGTH) {
+			System.out.println("isFrameValid: REJECTED - bad length field " + length
+					+ ", expected " + MEASUREMENT_FRAME_LENGTH + " (frame bytes 2-3: " + toHex(frame, 4) + ")");
 			return false;
 		}
 
@@ -268,7 +316,45 @@ public class PMSensor implements AutoCloseable {
 
 		int checksum = ((frame[frame.length - 2] & 0xFF) << 8) | (frame[frame.length - 1] & 0xFF);
 
-		return checksum == sum;
+		if (checksum != sum) {
+			System.out.println("isFrameValid: REJECTED - bad checksum, calculated=" + String.format("0x%04X", sum)
+					+ ", frame=" + String.format("0x%04X", checksum) + " (diff=" + (checksum - sum) + ")");
+			return false;
+		}
+
+		return true;
+	}
+
+	private void logInvalidFrame(int attempt, byte[] frame) {
+		if (frame == null) {
+			System.out.println("getMeasurements: attempt " + attempt + " - invalid frame: null");
+			return;
+		}
+
+		System.out.println("getMeasurements: attempt " + attempt + " - invalid frame (len=" + frame.length + ")="
+				+ toHex(frame) + " (bytesAvailable=" + serialPort.bytesAvailable() + ")");
+	}
+
+	private static String toHex(byte[] bytes) {
+		return toHex(bytes, bytes == null ? 0 : bytes.length);
+	}
+
+	private static String toHex(byte[] bytes, int len) {
+		if (bytes == null) {
+			return "null";
+		}
+
+		StringBuilder sb = new StringBuilder();
+		int actualLen = Math.min(len, bytes.length);
+
+		for (int i = 0; i < actualLen; i++) {
+			if (i > 0) {
+				sb.append(' ');
+			}
+			sb.append(String.format("%02X", bytes[i]));
+		}
+
+		return sb.toString();
 	}
 
 	private int[] processFrame(byte[] frame) {
