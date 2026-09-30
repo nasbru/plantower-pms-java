@@ -129,6 +129,11 @@ public class PMSensor implements AutoCloseable {
 			// measurement cycle. Done ONCE per call — the retry loop does not need
 			// to clear anything: readMeasurementFrame() scans the stream for the
 			// frame header (0x42 0x4D), so garbage and phase shifts are harmless.
+			int bufferedBeforeFlush = serialPort.bytesAvailable();
+			System.out.println("getMeasurements(" + retries + "): bytesAvailable before flush=" + bufferedBeforeFlush
+					+ (bufferedBeforeFlush > 0 ? "  <-- sensor is streaming (active mode?)"
+							: "  (silent - passive mode)"));
+
 			flush();
 			System.out.println("getMeasurements(" + retries + "): start, RX buffer flushed");
 
@@ -137,10 +142,10 @@ public class PMSensor implements AutoCloseable {
 
 				if (isFrameValid(frame)) {
 					int[] values = processFrame(frame);
-					System.out.println("getMeasurements: OK on attempt " + attempts + "/" + retries
-							+ " (invalid frames so far: " + invalidFrames + ", total "
-							+ (System.currentTimeMillis() - startTime) + " ms), pm1.0=" + values[0]
-							+ " pm2.5=" + values[1] + " pm10=" + values[2]);
+					System.out.println(
+							"getMeasurements: OK on attempt " + attempts + "/" + retries + " (invalid frames so far: "
+									+ invalidFrames + ", total " + (System.currentTimeMillis() - startTime)
+									+ " ms), pm1.0=" + values[0] + " pm2.5=" + values[1] + " pm10=" + values[2]);
 					return values;
 				}
 
@@ -169,15 +174,15 @@ public class PMSensor implements AutoCloseable {
 
 		for (int i = 1; i <= retries; i++) {
 			try {
-				byte[] response = sendCommandAndReadFrame(request, expectedResponse.length, timeoutMillis);
+				byte[] response = sendCommandAndReadAnswerFrame(request, expectedResponse.length, timeoutMillis);
 
 				if (Arrays.equals(response, expectedResponse)) {
 					System.out.println("executeWithRetries: success on attempt " + i + "/" + retries);
 					return true;
 				}
 
-				System.out.println("executeWithRetries: attempt " + i + "/" + retries
-						+ " mismatch, expected=" + toHex(expectedResponse) + ", got=" + toHex(response));
+				System.out.println("executeWithRetries: attempt " + i + "/" + retries + " mismatch, expected="
+						+ toHex(expectedResponse) + ", got=" + toHex(response));
 
 			} catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
@@ -186,8 +191,7 @@ public class PMSensor implements AutoCloseable {
 			}
 		}
 
-		System.out.println("executeWithRetries: FAILED after " + retries + " attempts, request="
-				+ toHex(request));
+		System.out.println("executeWithRetries: FAILED after " + retries + " attempts, request=" + toHex(request));
 		return false;
 	}
 
@@ -209,17 +213,17 @@ public class PMSensor implements AutoCloseable {
 	/**
 	 * Reads one complete measurement frame (32 bytes) directly from the byte
 	 * stream. Phase 1 scans byte-by-byte for the frame header (0x42 0x4D),
-	 * discarding garbage (noise bytes, stale data, misaligned leftovers) —
-	 * so the read window can never get stuck at a wrong phase. Phase 2 reads
-	 * the remaining 30 bytes of the frame. A fake header inside frame data is
-	 * caught later by the checksum in isFrameValid() and only costs one retry.
-	 * Returns the complete frame, a partial frame (timeout after the header),
-	 * or an empty array (timeout before any header).
+	 * discarding garbage (noise bytes, stale data, misaligned leftovers) — so the
+	 * read window can never get stuck at a wrong phase. Phase 2 reads the remaining
+	 * 30 bytes of the frame. A fake header inside frame data is caught later by the
+	 * checksum in isFrameValid() and only costs one retry. Returns the complete
+	 * frame, a partial frame (timeout after the header), or an empty array (timeout
+	 * before any header).
 	 */
 	private byte[] readMeasurementFrame(long timeoutMillis) throws InterruptedException {
 
 		long deadline = System.currentTimeMillis() + timeoutMillis;
-		int state = 0;   // number of header bytes matched so far (0..1)
+		int state = 0; // number of header bytes matched so far (0..1)
 		int garbage = 0; // bytes skipped before the header
 
 		while (System.currentTimeMillis() < deadline) {
@@ -239,8 +243,7 @@ public class PMSensor implements AutoCloseable {
 			} else if (b == 0x4D) {
 				// Header found — read the rest of the frame.
 				if (garbage > 0) {
-					System.out.println("readMeasurementFrame: skipped " + garbage
-							+ " garbage byte(s) before header");
+					System.out.println("readMeasurementFrame: skipped " + garbage + " garbage byte(s) before header");
 				}
 
 				byte[] frame = new byte[MEASUREMENT_FRAME_LENGTH];
@@ -251,8 +254,8 @@ public class PMSensor implements AutoCloseable {
 				int read = readFully(frame, 2, MEASUREMENT_FRAME_LENGTH - 2, remaining);
 
 				if (read < MEASUREMENT_FRAME_LENGTH - 2) {
-					System.out.println("readMeasurementFrame: WARNING - incomplete frame (read " + read
-							+ " of " + (MEASUREMENT_FRAME_LENGTH - 2) + " bytes after header)");
+					System.out.println("readMeasurementFrame: WARNING - incomplete frame (read " + read + " of "
+							+ (MEASUREMENT_FRAME_LENGTH - 2) + " bytes after header)");
 					return Arrays.copyOf(frame, 2 + read);
 				}
 
@@ -270,8 +273,8 @@ public class PMSensor implements AutoCloseable {
 			}
 		}
 
-		System.out.println("readMeasurementFrame: WARNING - header not found within timeout (skipped "
-				+ garbage + " garbage byte(s))");
+		System.out.println("readMeasurementFrame: WARNING - header not found within timeout (skipped " + garbage
+				+ " garbage byte(s))");
 		return new byte[0];
 	}
 
@@ -286,7 +289,7 @@ public class PMSensor implements AutoCloseable {
 		return read == 1 ? (one[0] & 0xFF) : -1;
 	}
 
-	private byte[] sendCommandAndReadFrame(byte[] request, int frameLength, int timeoutMillis)
+	private byte[] sendCommandAndReadAnswerFrame(byte[] request, int frameLength, int timeoutMillis)
 			throws InterruptedException {
 
 		long start = System.currentTimeMillis();
@@ -309,8 +312,8 @@ public class PMSensor implements AutoCloseable {
 				+ ", read=" + read + ", elapsed=" + elapsed + " ms, data=" + toHex(frame, read));
 
 		if (read < frameLength) {
-			System.out.println("sendCommandAndReadFrame: WARNING - incomplete frame (read " + read
-					+ " of " + frameLength + " bytes)");
+			System.out.println("sendCommandAndReadFrame: WARNING - incomplete frame (read " + read + " of "
+					+ frameLength + " bytes)");
 			return Arrays.copyOf(frame, read);
 		}
 
@@ -385,8 +388,8 @@ public class PMSensor implements AutoCloseable {
 
 	private boolean isFrameValid(byte[] frame) {
 		if (frame == null || frame.length != MEASUREMENT_FRAME_LENGTH) {
-			System.out.println("isFrameValid: REJECTED - wrong length "
-					+ (frame == null ? "(null)" : frame.length) + ", expected " + MEASUREMENT_FRAME_LENGTH);
+			System.out.println("isFrameValid: REJECTED - wrong length " + (frame == null ? "(null)" : frame.length)
+					+ ", expected " + MEASUREMENT_FRAME_LENGTH);
 			return false;
 		}
 
@@ -398,8 +401,8 @@ public class PMSensor implements AutoCloseable {
 		int length = (((frame[2] & 0xFF) << 8) | (frame[3] & 0xFF)) + 4;
 
 		if (length != MEASUREMENT_FRAME_LENGTH) {
-			System.out.println("isFrameValid: REJECTED - bad length field " + length
-					+ ", expected " + MEASUREMENT_FRAME_LENGTH + " (frame bytes 2-3: " + toHex(frame, 4) + ")");
+			System.out.println("isFrameValid: REJECTED - bad length field " + length + ", expected "
+					+ MEASUREMENT_FRAME_LENGTH + " (frame bytes 2-3: " + toHex(frame, 4) + ")");
 			return false;
 		}
 
@@ -570,5 +573,3 @@ public class PMSensor implements AutoCloseable {
 		}
 	}
 }
-
-

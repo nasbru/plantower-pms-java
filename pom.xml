@@ -5,7 +5,7 @@
 	<modelVersion>4.0.0</modelVersion>
 <groupId>com.github.nasbru</groupId>
 <artifactId>plantower-pms-java</artifactId>
-<version>0.3.0-TEST</version>
+<version>0.3.1-TEST</version>
 
 <build>
 	<plugins>
