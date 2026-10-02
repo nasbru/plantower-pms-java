@@ -15,7 +15,6 @@ public class PMSensor implements AutoCloseable {
 
 	private static final int MEASUREMENT_FRAME_LENGTH = 32;
 	private static final int DEFAULT_RETRIES = 10;
-	private static final int DEFAULT_MEASUREMENT_RETRIES = 50;
 	private static final int MODE_CMD_TIMEOUT_MS = 2000;
 	private static final int MEASUREMENT_TIMEOUT_MS = 3000;
 
@@ -166,7 +165,7 @@ public class PMSensor implements AutoCloseable {
 	}
 
 	public int[] getMeasurements() {
-		return getMeasurements(DEFAULT_MEASUREMENT_RETRIES);
+		return getMeasurements(DEFAULT_RETRIES);
 	}
 
 	private boolean executeWithRetries(byte[] request, byte[] expectedResponse, int retries, int timeoutMillis) {
