@@ -42,6 +42,27 @@ The build produces a JAR in the `target/` directory.
 
 ---
 
+## Installation via JitPack
+
+The library is available through [JitPack](https://jitpack.io/#nasbru/plantower-pms-java).
+
+```xml
+<repositories>
+    <repository>
+        <id>jitpack.io</id>
+        <url>https://jitpack.io</url>
+    </repository>
+</repositories>
+
+<dependencies>
+    <dependency>
+        <groupId>com.github.nasbru</groupId>
+        <artifactId>plantower-pms-java</artifactId>
+        <version>0.4.3</version>
+    </dependency>
+</dependencies>
+```
+
 ## Using the Library
 
 ### API overview
