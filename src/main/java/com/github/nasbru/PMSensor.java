@@ -537,7 +537,7 @@ public class PMSensor implements AutoCloseable {
 		}
 	}
 
-	public class MeasurementReadException extends RuntimeException {
+	public static class MeasurementReadException extends RuntimeException {
 		private static final long serialVersionUID = 1L;
 
 		public MeasurementReadException(String message) {
