@@ -5,7 +5,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.github.nasbru</groupId>
 	<artifactId>plantower-pms-java</artifactId>
-	<version>0.4.0</version>
+	<version>0.4.1</version>
 
 	<build>
 		<plugins>
@@ -24,7 +24,7 @@
 				<artifactId>exec-maven-plugin</artifactId>
 				<version>3.5.0</version>
 				<configuration>
-					<mainClass>com.github.nasbru.MainLauncher</mainClass>
+					<mainClass>com.github.nasbru.TestLauncher</mainClass>
 					<!-- TestLauncher lives in test sources, so the test
 					classpath is needed. -->
 					<classpathScope>test</classpathScope>

@@ -13,7 +13,12 @@ It configures the sensor to operate in passive mode and provides access to PM1.0
 - Passive-mode sensor communication
 - Reading PM1.0, PM2.5, and PM10 measurements
 - Serial communication through UART or a USB–serial adapter
-- Single dependency: [jSerialComm](https://fazecast.github.io/jSerialComm/) 2.11.2
+- Robust frame reception: the byte stream is scanned for the frame header,
+  so stale data, noise, and misaligned frames are skipped automatically
+- Logging through [SLF4J](https://www.slf4j.org/) 2.0.16 — the library ships
+  without a logging backend, so it stays silent unless the application
+  provides one
+- Single runtime dependency: [jSerialComm](https://fazecast.github.io/jSerialComm/) 2.11.2
 - Java 17 compatibility
 
 ---
@@ -52,9 +57,12 @@ The public API is provided by `com.github.nasbru.PMSensor`:
 | `sleep()` | Puts the sensor to sleep |
 | `wakeUp()` | Wakes the sensor up |
 | `getMeasurements()` | Returns `int[] { pm1_0, pm2_5, pm10 }` in µg/m³ |
+| `getMeasurements(int retries)` | Same as above, with a configurable retry count |
 | `close()` | Closes the serial port (`AutoCloseable`) |
 
-Each mode-switching method has an overload accepting a `retries` parameter. The default is 10 retries.
+Each mode-switching method (`init()`-related `wakeUp()`/`sleep()`, `passiveMode()`,
+`activeMode()`) has an overload accepting a `retries` parameter. The default is
+10 retries.
 
 Errors are reported exclusively through exceptions:
 - `IllegalArgumentException` — invalid serial device path
@@ -128,6 +136,45 @@ PM1.0: 3, PM2.5: 5, PM10: 6
 
 ---
 
+## Logging
+
+The library logs through SLF4J and does not bundle any logging backend. Without
+a backend on the classpath, all log output is silently discarded.
+
+To see the library's log output (diagnostics for frame reception, retries,
+garbage bytes skipped, etc.), add an SLF4J binding to your application and set
+the log level to `DEBUG` (or `TRACE` for per-frame hex dumps), for example with
+`slf4j-simple`:
+
+```xml
+<dependency>
+    <groupId>org.slf4j</groupId>
+    <artifactId>slf4j-simple</artifactId>
+    <version>2.0.16</version>
+</dependency>
+```
+
+```bash
+java -Dorg.slf4j.simpleLogger.defaultLogLevel=debug ...
+```
+
+---
+
+## Test Harness
+
+The repository includes a simple command-line test harness (`TestLauncher`)
+that continuously polls the sensor and prints measurements:
+
+```bash
+mvn compile exec:java -Dexec.args="/dev/ttyUSB0 2000"
+```
+
+The first argument is the serial device path, the second is the read interval
+in milliseconds. The harness lives in the test sources, so it is not part of
+the published library JAR.
+
+---
+
 ## Hardware and Wiring
 
 Connect the sensor to the host as follows:
@@ -196,6 +243,10 @@ Check the following:
 ## Notes
 
 - After power-up, the sensor starts in active mode by default.
+- `init()` wakes the sensor up and then waits about 1 second before returning,
+  because the sensor needs that time to reliably accept subsequent commands
+  (without the delay, `passiveMode()` right after `init()` may be silently
+  ignored).
 - After waking the sensor from sleep mode, allow the fan to run for at least
   30 seconds before taking a measurement. For reading intervals of 30 seconds
   or less, it is recommended not to put the sensor to sleep. Instead, keep it
